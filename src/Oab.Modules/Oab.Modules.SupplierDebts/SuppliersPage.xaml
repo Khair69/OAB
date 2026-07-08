@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:oab="clr-namespace:Oab.App.Localization;assembly=Oab.App"
+             xmlns:local="clr-namespace:Oab.Modules.SupplierDebts"
+             x:Class="Oab.Modules.SupplierDebts.SuppliersPage"
+             x:DataType="local:SuppliersViewModel"
+             Title="{oab:Tr Suppliers_Title}">
+    <Grid>
+        <CollectionView ItemsSource="{Binding Suppliers}" Margin="12">
+            <CollectionView.EmptyView>
+                <Label Text="{oab:Tr Suppliers_Empty}"
+                       HorizontalOptions="Center" VerticalOptions="Center"
+                       TextColor="Gray" Margin="24" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="local:SupplierRow">
+                    <Border StrokeThickness="0" BackgroundColor="{AppThemeBinding Light=#F2F2F7, Dark=#2C2C2E}"
+                            StrokeShape="RoundRectangle 12" Margin="0,4">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Padding="14" RowSpacing="4">
+                            <Label Text="{Binding Party.Name}" FontAttributes="Bold" FontSize="16" />
+                            <Label Grid.Row="1" Text="{Binding BalanceText}" TextColor="{Binding BalanceColor}" FontSize="14" />
+                            <Button Grid.Column="1" Grid.RowSpan="2"
+                                    Text="{oab:Tr Suppliers_RecordPayment}"
+                                    IsVisible="{Binding HasDebt}"
+                                    VerticalOptions="Center"
+                                    Clicked="OnRecordPaymentClicked" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Button Text="＋" FontSize="26" WidthRequest="60" HeightRequest="60" CornerRadius="30"
+                HorizontalOptions="End" VerticalOptions="End" Margin="24"
+                SemanticProperties.Description="{oab:Tr Suppliers_AddSupplier}"
+                Clicked="OnAddSupplierClicked" />
+    </Grid>
+</ContentPage>

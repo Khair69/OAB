@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/customers/">
+    <Project Path="customers/Oab.Customer.Template/Oab.Customer.Template.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Oab.App/Oab.App.csproj" />
+    <Project Path="src/Oab.Core/Oab.Core.csproj" />
+    <Project Path="src/Oab.Data/Oab.Data.csproj" />
+  </Folder>
+  <Folder Name="/src/Oab.Modules/">
+    <Project Path="src/Oab.Modules/Oab.Modules.Purchases/Oab.Modules.Purchases.csproj" />
+    <Project Path="src/Oab.Modules/Oab.Modules.SupplierDebts/Oab.Modules.SupplierDebts.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Oab.Core.Tests/Oab.Core.Tests.csproj" />
+    <Project Path="tests/Oab.Data.Tests/Oab.Data.Tests.csproj" />
+  </Folder>
+</Solution>

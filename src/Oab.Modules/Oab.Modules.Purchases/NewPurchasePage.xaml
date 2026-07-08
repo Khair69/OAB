@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:oab="clr-namespace:Oab.App.Localization;assembly=Oab.App"
+             xmlns:local="clr-namespace:Oab.Modules.Purchases"
+             x:Class="Oab.Modules.Purchases.NewPurchasePage"
+             x:DataType="local:NewPurchaseViewModel"
+             Title="{oab:Tr Purchases_New}">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="14">
+            <Label Text="{oab:Tr Purchases_Supplier}" FontAttributes="Bold" />
+            <Picker ItemsSource="{Binding Suppliers}" ItemDisplayBinding="{Binding Name}"
+                    SelectedItem="{Binding SelectedSupplier}" />
+            <Entry Placeholder="{oab:Tr Purchases_NewSupplierHint}" Text="{Binding NewSupplierName}" />
+
+            <Label Text="{oab:Tr Common_Amount}" FontAttributes="Bold" />
+            <Entry Keyboard="Numeric" Text="{Binding AmountText}" />
+
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="{oab:Tr Purchases_PaidNow}" VerticalOptions="Center" FontAttributes="Bold" />
+                <Switch Grid.Column="1" IsToggled="{Binding PaidNow}" />
+            </Grid>
+
+            <Label Text="{oab:Tr Common_Date}" FontAttributes="Bold" />
+            <DatePicker Date="{Binding Date}" />
+
+            <Label Text="{oab:Tr Common_Note}" FontAttributes="Bold" />
+            <Entry Text="{Binding Note}" />
+
+            <Label Text="{Binding Error}" TextColor="Firebrick" />
+
+            <Button Text="{oab:Tr Common_Save}" Command="{Binding SaveCommand}" Margin="0,10,0,0" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

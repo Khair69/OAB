@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:oab="clr-namespace:Oab.App.Localization;assembly=Oab.App"
+             xmlns:local="clr-namespace:Oab.Modules.Purchases"
+             x:Class="Oab.Modules.Purchases.PurchasesListPage"
+             x:Name="ThisPage"
+             x:DataType="local:PurchasesListViewModel"
+             Title="{oab:Tr Purchases_Title}">
+    <Grid>
+        <CollectionView ItemsSource="{Binding Purchases}" Margin="12">
+            <CollectionView.EmptyView>
+                <Label Text="{oab:Tr Purchases_Empty}"
+                       HorizontalOptions="Center" VerticalOptions="Center"
+                       TextColor="Gray" Margin="24" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="local:PurchaseRow">
+                    <Border StrokeThickness="0" BackgroundColor="{AppThemeBinding Light=#F2F2F7, Dark=#2C2C2E}"
+                            StrokeShape="RoundRectangle 12" Margin="0,4">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Padding="14" RowSpacing="4">
+                            <Label Text="{Binding SupplierName}" FontAttributes="Bold" FontSize="16" />
+                            <Label Grid.Column="1" Text="{Binding TotalText}" FontSize="16" />
+                            <Label Grid.Row="1" Text="{Binding DateText}" FontSize="12" TextColor="Gray" />
+                            <Label Grid.Row="1" Grid.Column="1" Text="{Binding StatusText}"
+                                   FontSize="13" TextColor="{Binding StatusColor}" />
+                            <Button Grid.Row="2" Grid.ColumnSpan="2"
+                                    Text="{oab:Tr Purchases_PayRemaining}"
+                                    IsVisible="{Binding IsUnpaid}"
+                                    HorizontalOptions="End"
+                                    Command="{Binding BindingContext.PayRemainingCommand, Source={x:Reference ThisPage}}"
+                                    CommandParameter="{Binding}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Button Text="＋" FontSize="26" WidthRequest="60" HeightRequest="60" CornerRadius="30"
+                HorizontalOptions="End" VerticalOptions="End" Margin="24"
+                SemanticProperties.Description="{oab:Tr Purchases_New}"
+                Clicked="OnNewPurchaseClicked" />
+    </Grid>
+</ContentPage>

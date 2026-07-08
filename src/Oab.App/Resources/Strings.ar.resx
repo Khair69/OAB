@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common_Save" xml:space="preserve">
+    <value>حفظ</value>
+  </data>
+  <data name="Common_Cancel" xml:space="preserve">
+    <value>إلغاء</value>
+  </data>
+  <data name="Common_OK" xml:space="preserve">
+    <value>موافق</value>
+  </data>
+  <data name="Common_Amount" xml:space="preserve">
+    <value>المبلغ</value>
+  </data>
+  <data name="Common_Note" xml:space="preserve">
+    <value>ملاحظة</value>
+  </data>
+  <data name="Common_Date" xml:space="preserve">
+    <value>التاريخ</value>
+  </data>
+  <data name="Common_Paid" xml:space="preserve">
+    <value>مدفوع</value>
+  </data>
+  <data name="Common_Unpaid" xml:space="preserve">
+    <value>غير مدفوع</value>
+  </data>
+  <data name="Common_Remaining" xml:space="preserve">
+    <value>المتبقي</value>
+  </data>
+  <data name="Common_Add" xml:space="preserve">
+    <value>إضافة</value>
+  </data>
+  <data name="Common_Language" xml:space="preserve">
+    <value>العربية / English</value>
+  </data>
+  <data name="Common_Error" xml:space="preserve">
+    <value>حدث خطأ ما</value>
+  </data>
+  <data name="Common_InvalidAmount" xml:space="preserve">
+    <value>أدخل مبلغًا صحيحًا أكبر من صفر</value>
+  </data>
+  <data name="Party_Name" xml:space="preserve">
+    <value>الاسم</value>
+  </data>
+  <data name="Party_Phone" xml:space="preserve">
+    <value>الهاتف</value>
+  </data>
+  <data name="Purchases_Title" xml:space="preserve">
+    <value>المشتريات</value>
+  </data>
+  <data name="Purchases_New" xml:space="preserve">
+    <value>شراء جديد</value>
+  </data>
+  <data name="Purchases_Supplier" xml:space="preserve">
+    <value>المورّد</value>
+  </data>
+  <data name="Purchases_NewSupplierHint" xml:space="preserve">
+    <value>...أو اكتب اسم مورّد جديد</value>
+  </data>
+  <data name="Purchases_PaidNow" xml:space="preserve">
+    <value>مدفوع الآن</value>
+  </data>
+  <data name="Purchases_Empty" xml:space="preserve">
+    <value>لا مشتريات بعد. سجّل أول شراء بزر +</value>
+  </data>
+  <data name="Purchases_PayRemaining" xml:space="preserve">
+    <value>دفع المتبقي</value>
+  </data>
+  <data name="Purchases_SelectSupplier" xml:space="preserve">
+    <value>اختر مورّدًا أو اكتب اسمًا جديدًا</value>
+  </data>
+  <data name="Suppliers_Title" xml:space="preserve">
+    <value>الموردون</value>
+  </data>
+  <data name="Suppliers_YouOwe" xml:space="preserve">
+    <value>عليك</value>
+  </data>
+  <data name="Suppliers_TheyOwe" xml:space="preserve">
+    <value>لك عنده</value>
+  </data>
+  <data name="Suppliers_Settled" xml:space="preserve">
+    <value>خالص</value>
+  </data>
+  <data name="Suppliers_RecordPayment" xml:space="preserve">
+    <value>تسجيل دفعة</value>
+  </data>
+  <data name="Suppliers_PaymentPrompt" xml:space="preserve">
+    <value>كم دفعت؟</value>
+  </data>
+  <data name="Suppliers_AddSupplier" xml:space="preserve">
+    <value>إضافة مورّد</value>
+  </data>
+  <data name="Suppliers_NamePrompt" xml:space="preserve">
+    <value>اسم المورّد</value>
+  </data>
+  <data name="Suppliers_Empty" xml:space="preserve">
+    <value>لا موردين بعد. أضف واحدًا بزر +</value>
+  </data>
+</root>
