@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Oab.Core.Ledger;
+using Oab.Data.Backup;
 
 namespace Oab.Data;
 
@@ -17,6 +18,8 @@ public static class OabDataServiceCollectionExtensions
             options.UseSqlite($"Data Source={databasePath}"));
         services.AddSingleton<ILedgerStore, LedgerStore>();
         services.AddSingleton<LedgerService>();
+        services.AddSingleton(new OabDatabase(databasePath));
+        services.AddSingleton<IDatabaseBackup, DatabaseBackupService>();
         return services;
     }
 }

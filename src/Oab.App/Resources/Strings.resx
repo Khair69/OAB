@@ -141,4 +141,55 @@
   <data name="Customers_PaymentPrompt" xml:space="preserve">
     <value>How much did they pay?</value>
   </data>
+  <data name="Backup_Title" xml:space="preserve">
+    <value>Backup</value>
+  </data>
+  <data name="Backup_Explain" xml:space="preserve">
+    <value>Your book lives only on this phone. Send yourself a copy regularly — if the phone is lost or broken, this is the only way to get it back.</value>
+  </data>
+  <data name="Backup_ShareDatabase" xml:space="preserve">
+    <value>Send backup file</value>
+  </data>
+  <data name="Backup_ShareDatabaseHint" xml:space="preserve">
+    <value>A full copy that can be restored into the app later. Send it to yourself on WhatsApp or save it to Drive.</value>
+  </data>
+  <data name="Backup_ShareSummary" xml:space="preserve">
+    <value>Send readable summary</value>
+  </data>
+  <data name="Backup_ShareSummaryHint" xml:space="preserve">
+    <value>A plain list of who owes what, readable on any phone even without this app.</value>
+  </data>
+  <data name="Backup_Restore" xml:space="preserve">
+    <value>Restore from a backup</value>
+  </data>
+  <data name="Backup_RestoreHint" xml:space="preserve">
+    <value>Use this only on a new phone, or after losing data.</value>
+  </data>
+  <data name="Backup_RestoreWarning" xml:space="preserve">
+    <value>This replaces everything currently in the app with the backup file. Anything recorded since that backup will be lost. Continue?</value>
+  </data>
+  <data name="Backup_RestoreConfirm" xml:space="preserve">
+    <value>Yes, replace</value>
+  </data>
+  <data name="Backup_RestoreInvalid" xml:space="preserve">
+    <value>That file is not a valid backup of this app.</value>
+  </data>
+  <data name="Backup_RestoreDone" xml:space="preserve">
+    <value>Restored. Please close and reopen the app.</value>
+  </data>
+  <data name="Backup_ShareTitle" xml:space="preserve">
+    <value>Shop backup</value>
+  </data>
+  <data name="Backup_YouOwe" xml:space="preserve">
+    <value>You owe</value>
+  </data>
+  <data name="Backup_OwesYou" xml:space="preserve">
+    <value>Owed to you</value>
+  </data>
+  <data name="Backup_Settled" xml:space="preserve">
+    <value>Settled accounts</value>
+  </data>
+  <data name="Backup_Total" xml:space="preserve">
+    <value>Total</value>
+  </data>
 </root>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:oab="clr-namespace:Oab.App.Localization;assembly=Oab.App"
+             xmlns:local="clr-namespace:Oab.Modules.Backup"
+             x:Class="Oab.Modules.Backup.BackupPage"
+             x:DataType="local:BackupViewModel"
+             Title="{oab:Tr Backup_Title}">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <Label Text="{oab:Tr Backup_Explain}" TextColor="Gray" />
+
+            <Border StrokeThickness="0" BackgroundColor="{AppThemeBinding Light=#F2F2F7, Dark=#2C2C2E}"
+                    StrokeShape="RoundRectangle 12">
+                <VerticalStackLayout Padding="16" Spacing="10">
+                    <Label Text="{oab:Tr Backup_ShareDatabase}" FontAttributes="Bold" FontSize="16" />
+                    <Label Text="{oab:Tr Backup_ShareDatabaseHint}" FontSize="12" TextColor="Gray" />
+                    <Button Text="{oab:Tr Backup_ShareDatabase}" Clicked="OnShareDatabaseClicked" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border StrokeThickness="0" BackgroundColor="{AppThemeBinding Light=#F2F2F7, Dark=#2C2C2E}"
+                    StrokeShape="RoundRectangle 12">
+                <VerticalStackLayout Padding="16" Spacing="10">
+                    <Label Text="{oab:Tr Backup_ShareSummary}" FontAttributes="Bold" FontSize="16" />
+                    <Label Text="{oab:Tr Backup_ShareSummaryHint}" FontSize="12" TextColor="Gray" />
+                    <Button Text="{oab:Tr Backup_ShareSummary}" Clicked="OnShareSummaryClicked" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border StrokeThickness="0" BackgroundColor="{AppThemeBinding Light=#FFF0F0, Dark=#3A2626}"
+                    StrokeShape="RoundRectangle 12">
+                <VerticalStackLayout Padding="16" Spacing="10">
+                    <Label Text="{oab:Tr Backup_Restore}" FontAttributes="Bold" FontSize="16" />
+                    <Label Text="{oab:Tr Backup_RestoreHint}" FontSize="12" TextColor="Gray" />
+                    <Button Text="{oab:Tr Backup_Restore}" BackgroundColor="Firebrick" TextColor="White"
+                            Clicked="OnRestoreClicked" />
+                </VerticalStackLayout>
+            </Border>
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+            <Label Text="{Binding Status}" FontSize="13" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

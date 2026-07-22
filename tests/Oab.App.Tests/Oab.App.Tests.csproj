@@ -31,6 +31,7 @@
     <ProjectReference Include="..\..\src\Oab.Modules\Oab.Modules.SupplierDebts\Oab.Modules.SupplierDebts.csproj" />
     <ProjectReference Include="..\..\src\Oab.Modules\Oab.Modules.CustomerDebts\Oab.Modules.CustomerDebts.csproj" />
     <ProjectReference Include="..\Oab.TestSupport\Oab.TestSupport.csproj" />
+    <ProjectReference Include="..\..\src\Oab.Modules\Oab.Modules.Backup\Oab.Modules.Backup.csproj" />
   </ItemGroup>
 
   <ItemGroup>

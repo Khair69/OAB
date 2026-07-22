@@ -26,6 +26,7 @@ src/Oab.Data          EF Core + SQLite: OabDbContext, LedgerStore, migrations.
 src/Oab.App           Shared MAUI shell: module host (IOabModule), OabShell flyout,
                       localization (Strings.resx + ar), ShopConfig, money formatting.
 src/Oab.Modules/*     Optional features. Each is self-contained: pages, VMs, DI registration.
+                      Backup is effectively mandatory — see below.
 customers/*           One tiny project per shop: ShopConfig + list of modules. ~40 lines.
 tests/                xUnit suites for the money engine and the SQLite store.
 ```
@@ -41,6 +42,13 @@ tests/                xUnit suites for the money engine and the SQLite store.
 2. **Custom work never touches core.** A shop wanting a special feature gets a
    new `IOabModule` in *their* customer folder. If a second shop wants it,
    promote it to `src/Oab.Modules/`. Never fork the repo per customer.
+
+3. **Always ship `BackupModule`.** The book lives on one phone with no sync, so
+   without backup a lost phone loses everything — worse than the paper notebook
+   we replace. It offers a restorable `.db` snapshot (taken with `VACUUM INTO`,
+   safe while the app is running) and a plain-text summary a person can read
+   even without the app. Restore validates the file, keeps a `.pre-restore`
+   copy, and migrates an older backup up to the current schema.
 
 ### Onboarding a new shop
 

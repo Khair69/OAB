@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Oab.App;
+using Oab.Modules.Backup;
 using Oab.Modules.CustomerDebts;
 using Oab.Modules.Purchases;
 using Oab.Modules.SupplierDebts;
@@ -30,7 +31,8 @@ public static class MauiProgram
                 },
                 new PurchasesModule(),
                 new SupplierDebtsModule(),
-                new CustomerDebtsModule())
+                new CustomerDebtsModule(),
+                new BackupModule())
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
