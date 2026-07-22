@@ -1,4 +1,5 @@
 using System.Globalization;
+using Oab.App.Diagnostics;
 using Oab.App.Localization;
 using Oab.Core.Domain;
 
@@ -41,13 +42,13 @@ public partial class PartyStatementPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await RunAsync(() => _viewModel.LoadAsync(_partyId, _perspective));
+        await this.RunSafelyAsync(() => _viewModel.LoadAsync(_partyId, _perspective));
     }
 
     private async void OnEntryTapped(object? sender, TappedEventArgs e)
     {
         if ((sender as BindableObject)?.BindingContext is StatementRow row)
-            await RunAsync(() => CorrectAsync(row));
+            await this.RunSafelyAsync(() => CorrectAsync(row));
     }
 
     /// <summary>
@@ -106,22 +107,4 @@ public partial class PartyStatementPage : ContentPage
     private static bool TryParseAmount(string text, out decimal amount) =>
         decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out amount)
         || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
-
-    /// <summary>
-    /// Event handlers are async void, so an escaping exception takes the whole
-    /// app down with no message. Everything the user can trigger here funnels
-    /// through this, the same as <c>BackupPage</c> does. Correcting money is the
-    /// last place a silent crash is acceptable.
-    /// </summary>
-    private async Task RunAsync(Func<Task> action)
-    {
-        try
-        {
-            await action();
-        }
-        catch (Exception ex)
-        {
-            await DisplayAlertAsync(Loc["Common_Error"], ex.Message, Loc["Common_OK"]);
-        }
-    }
 }

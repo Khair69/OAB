@@ -31,7 +31,7 @@ no internet required, ever.
 | 01 | [Architecture](01-architecture.md) | How the layers fit, what depends on what, what happens at startup |
 | 02 | [The Money Engine](02-money-engine.md) | The append-only ledger, sign convention, every `LedgerService` method, worked examples |
 | 03 | [Data Layer](03-data-layer.md) | SQLite schema, EF Core mapping, migrations, the backup/restore machinery |
-| 04 | [App Shell](04-app-shell.md) | `OabApp`, `OabShell`, `ShopConfig`, localization internals, the party statement screen |
+| 04 | [App Shell](04-app-shell.md) | `OabApp`, `OabShell`, `ShopConfig`, localization internals, crash logging, the party statement screen |
 | 05 | [Feature Modules](05-modules.md) | Every screen in the product, and how to write a new module |
 | 06 | [Localization & RTL](06-localization.md) | The full resource-key catalogue, live language switching, Arabic-Indic digits |
 | 07 | [Per-Shop Customization](07-customization.md) | Onboarding a new shop end to end, every `ShopConfig` knob |
@@ -55,10 +55,10 @@ no internet required, ever.
 | **Platform** | .NET 10 · .NET MAUI · Android (primary) + Windows (desk testing) |
 | **Storage** | SQLite via EF Core 10.0.9, one file per shop, on-device only |
 | **MVVM** | CommunityToolkit.Mvvm 8.4.2 |
-| **Tests** | xUnit — **96 tests, all passing** (42 core · 13 data · 41 view-model) |
+| **Tests** | xUnit — **117 tests, all passing** (42 core · 16 data · 59 view-model + error log) |
 | **Solution projects** | 3 libraries + 4 feature modules + 1 customer head + 4 test projects |
 | **Migrations** | 2 (`InitialCreate`, `AddPartyRoles`) |
-| **Localized strings** | 79 keys × 2 languages (English, Arabic) |
+| **Localized strings** | 81 keys × 2 languages (English, Arabic) |
 | **Screens** | 6 (Purchases list, New purchase, Suppliers, Customers, Backup, Party statement) — plus the correction flow, which is dialogs over the statement |
 | **Network use** | None. The app never makes a network call. |
 
@@ -73,7 +73,7 @@ Decisions](09-decisions.md).
    `Adjustment` entries carrying a mandatory note — never edits, never deletes.
    There is no mutable balance column anywhere, and there never should be. The
    shopkeeper's way in is tapping an entry on the party statement and saying what
-   it should have been ([04 §9](04-app-shell.md#the-correction-flow)).
+   it should have been ([04 §10](04-app-shell.md#the-correction-flow)).
 
 2. **Custom work never touches core.** A shop that wants a special feature gets
    a new `IOabModule` in *their* customer folder. If a second shop wants it, it
@@ -83,3 +83,13 @@ Decisions](09-decisions.md).
 3. **Every build ships `BackupModule`.** The book lives on one phone with no
    sync. Without backup, a lost phone loses everything — strictly worse than the
    paper notebook being replaced.
+
+### And one habit
+
+**Nothing fails silently.** Every `async void` handler runs through
+`Page.RunSafelyAsync`; anything that escapes is caught by process-wide handlers
+and written to a shareable `errors.log`
+([04 §9](04-app-shell.md#9-diagnostics--making-a-crash-leave-evidence)). On a
+shopkeeper's phone there is no console and no network, so a crash that leaves no
+record is a bug that can never be fixed. Within 25 seconds of this landing it
+revealed that two of the six screens had never once loaded successfully.

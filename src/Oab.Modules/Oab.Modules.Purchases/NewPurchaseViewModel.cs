@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Oab.App.Diagnostics;
 using Oab.App.Localization;
 using Oab.Core.Domain;
 using Oab.Core.Ledger;
@@ -43,6 +44,17 @@ public partial class NewPurchaseViewModel(
             Suppliers.Add(party);
     }
 
+    /// <summary>
+    /// The only save button in the app, and the one place a purchase is written.
+    /// <para>
+    /// A <c>[RelayCommand]</c> is not an event handler, so it never reached the
+    /// pages' <c>RunSafelyAsync</c> — and <c>AsyncRelayCommand</c> rethrows a
+    /// faulted body onto the synchronization context, which means a write failure
+    /// here used to take the app down while the shopkeeper was looking at a form
+    /// full of typing. It now reports into the same <c>Error</c> label that
+    /// validation uses, so the form stays open and nothing is retyped.
+    /// </para>
+    /// </summary>
     [RelayCommand]
     private async Task SaveAsync()
     {
@@ -56,23 +68,35 @@ public partial class NewPurchaseViewModel(
 
         Party? supplier = SelectedSupplier;
         var newName = NewSupplierName.Trim();
-        if (newName.Length > 0)
-        {
-            supplier = new Party { Name = newName, Roles = PartyRole.Supplier };
-            await store.AddPartyAsync(supplier);
-        }
-        if (supplier is null)
+        if (supplier is null && newName.Length == 0)
         {
             Error = localization["Purchases_SelectSupplier"];
             return;
         }
 
-        var occurredAt = new DateTimeOffset(Date.Date.Add(DateTime.Now.TimeOfDay),
-            TimeZoneInfo.Local.GetUtcOffset(DateTime.Now));
-        await ledger.RecordPurchaseAsync(supplier.Id, amount, PaidNow, occurredAt,
-            Note.Trim().Length > 0 ? Note.Trim() : null);
+        try
+        {
+            if (newName.Length > 0)
+            {
+                supplier = new Party { Name = newName, Roles = PartyRole.Supplier };
+                await store.AddPartyAsync(supplier);
+            }
 
-        await Shell.Current.Navigation.PopAsync();
+            var occurredAt = new DateTimeOffset(Date.Date.Add(DateTime.Now.TimeOfDay),
+                TimeZoneInfo.Local.GetUtcOffset(DateTime.Now));
+            await ledger.RecordPurchaseAsync(supplier.Id, amount, PaidNow, occurredAt,
+                Note.Trim().Length > 0 ? Note.Trim() : null);
+
+            await Shell.Current.Navigation.PopAsync();
+        }
+        catch (Exception ex)
+        {
+            // ErrorLog.Current rather than an injected instance: view models are
+            // constructed directly in tests, and a logger that must be supplied
+            // is a logger that gets left out. Null-safe by design.
+            ErrorLog.Current?.Write($"{nameof(NewPurchaseViewModel)}.{nameof(SaveAsync)}", ex);
+            Error = $"{localization["Common_Error"]}: {ex.Message}";
+        }
     }
 
     private static bool TryParseAmount(string text, out decimal amount) =>

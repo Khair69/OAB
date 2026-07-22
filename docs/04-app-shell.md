@@ -19,6 +19,10 @@ src/Oab.App/
 ├── OabServices.cs                Static service-locator escape hatch
 ├── ShopConfig.cs                 Everything about one shop that is configuration
 ├── Modules/IOabModule.cs         The module contract + OabNavItem
+├── Diagnostics/
+│   ├── ErrorLog.cs               Shareable crash log — never throws
+│   ├── GlobalExceptionHandler.cs Process-wide hooks; records, does not recover
+│   └── PageErrorHandling.cs      RunSafelyAsync — the async void funnel
 ├── Localization/
 │   ├── LocalizationManager.cs    Lookup, live switching, persistence, FlowDirection
 │   └── TrExtension.cs            {oab:Tr Key} XAML markup extension
@@ -46,14 +50,18 @@ public static MauiAppBuilder UseOab(
 
 This one method is the entire public API a customer head project needs. It:
 
-1. calls `builder.UseMauiApp<OabApp>()`;
-2. registers `ShopConfig`, `LocalizationManager` (and assigns the static
-   `LocalizationManager.Current` inside the factory), `IMoneyFormatter`;
-3. calls `AddOabData(Path.Combine(FileSystem.AppDataDirectory, config.DatabaseFileName))`;
-4. registers the module list itself and the `OabShell`;
-5. registers `PartyStatementViewModel` + `PartyStatementPage` — the shared detail
+1. builds the `ErrorLog`, assigns `ErrorLog.Current`, and installs the
+   process-wide exception handlers — **first, before `UseMauiApp`**, so that
+   everything after this line leaves a record if it fails (§9);
+2. calls `builder.UseMauiApp<OabApp>()`;
+3. registers the `ErrorLog` instance, `ShopConfig`, `LocalizationManager` (and
+   assigns the static `LocalizationManager.Current` inside the factory),
+   `IMoneyFormatter`;
+4. calls `AddOabData(Path.Combine(FileSystem.AppDataDirectory, config.DatabaseFileName))`;
+5. registers the module list itself and the `OabShell`;
+6. registers `PartyStatementViewModel` + `PartyStatementPage` — the shared detail
    pages every shop gets, module list notwithstanding;
-6. for each module: `ConfigureServices(services)`, `RegisterRoutes()`, and
+7. for each module: `ConfigureServices(services)`, `RegisterRoutes()`, and
    `AddTransient(navItem.PageType)` for every nav item it declares.
 
 **Module order is menu order.**
@@ -216,7 +224,157 @@ throws a clear `InvalidOperationException` if used before `OabApp` starts.
 Used in exactly two places today —
 `PurchasesListPage.OnNewPurchaseClicked` and `PartyStatementPage.PushAsync`.
 
-## 9. Party statement — shared detail screen
+## 9. Diagnostics — making a crash leave evidence
+
+Files: [`Diagnostics/ErrorLog.cs`](../src/Oab.App/Diagnostics/ErrorLog.cs),
+[`GlobalExceptionHandler.cs`](../src/Oab.App/Diagnostics/GlobalExceptionHandler.cs),
+[`PageErrorHandling.cs`](../src/Oab.App/Diagnostics/PageErrorHandling.cs).
+
+> On a shopkeeper's phone there is no console, no debugger, no crash reporter and
+> no network to send one to. Before this, an exception meant the app vanished and
+> the only available bug report was *"it closed"*.
+
+Three pieces, in the order an exception meets them.
+
+### `RunSafelyAsync` — the page-level funnel
+
+```csharp
+protected override async void OnAppearing()
+{
+    base.OnAppearing();
+    await this.RunSafelyAsync(() => _viewModel.LoadAsync());
+}
+```
+
+An extension method on `Page`. It runs the action, and on failure **logs the
+exception with the name of the handler it escaped from** and turns it into a
+message. `[CallerMemberName]` supplies that name, so no call site spells it out
+and every record reads `SuppliersPage.OnRecordPaymentClicked` rather than
+`SuppliersPage`.
+
+MAUI event handlers must be `async void` — there is no `Task` for anyone to
+await, so an escaping exception goes straight to the process. `BackupPage` and
+`PartyStatementPage` had each grown a private copy of this method; the
+duplication is what said it belonged in one place.
+
+**Why an extension method and not a base page class.** A base class would have to
+be inherited by every page in every module, and modules are meant to be able to
+hold a plain `ContentPage`.
+
+**The optional `onError`.** `BackupPage` reports into its status label rather
+than an alert — an alert on top of a share sheet is a dialog nobody sees — so it
+passes its own reporter and keeps its `IsBusy` guard around the call. Everyone
+else gets the default: `Common_Error` as the title, the exception message as the
+body. The raw message is not shopkeeper-friendly, and it is there anyway, because
+a screenshot sent over WhatsApp is how support actually happens for this product.
+
+Reporting is itself wrapped in a try/catch. A dialog raised during teardown can
+throw, and crashing over the error message rather than the error would be a
+strictly worse outcome.
+
+Applied to **every** `async void` handler and `OnAppearing` override in the app:
+
+| Page | Handlers funnelled |
+|---|---|
+| `PurchasesListPage` | `OnAppearing`, `OnNewPurchaseClicked` |
+| `NewPurchasePage` | `OnAppearing` |
+| `SuppliersPage` | `OnAppearing`, add, tap, record payment |
+| `CustomersPage` | `OnAppearing`, add, tap, record debt, collect payment |
+| `PartyStatementPage` | `OnAppearing`, tap → the whole correction flow |
+| `BackupPage` | share `.db`, share summary, share log, restore |
+
+`NewPurchaseViewModel.SaveAsync` is the one guarded path that is *not* an event
+handler. A `[RelayCommand]` produces an `AsyncRelayCommand`, which rethrows a
+faulted body onto the synchronization context — so a failed write used to close
+the app while the shopkeeper was looking at a form full of typing. It now reports
+into the same `Error` label validation uses, and the form stays open.
+
+### `GlobalExceptionHandler` — the last line
+
+```csharp
+GlobalExceptionHandler.Install(errorLog);
+```
+
+Catches what a page cannot see coming:
+
+| Hook | Catches |
+|---|---|
+| `AppDomain.CurrentDomain.UnhandledException` | Any managed thread, including the startup path |
+| `TaskScheduler.UnobservedTaskException` | A faulted `Task` nobody awaited — the quiet one; it surfaces at an arbitrary later GC and says nothing by default |
+| `AndroidEnvironment.UnhandledExceptionRaiser` *(`#if ANDROID`)* | The Java/managed boundary, which is where most MAUI handler code actually runs |
+| `Microsoft.UI.Xaml.Application.Current.UnhandledException` *(`#if WINDOWS`)* | Desk testing, where every bug is seen first |
+
+**It records; it does not recover.** None of these mark the exception handled or
+keep the process alive — see [D21](09-decisions.md#d21--the-global-handler-records-it-does-not-recover).
+
+Installed in `UseOab` **before `UseMauiApp`**, which is what puts the
+`Database.Migrate()` call in the `OabApp` constructor (D10) inside its coverage.
+That failure mode — a migration crash at startup with no recovery UI — is the
+single worst one in the product, and it was previously invisible.
+
+### `ErrorLog` — the file
+
+A plain-text file at `FileSystem.AppDataDirectory/errors.log`, newest record
+last. One record looks like:
+
+```
+=== 2026-07-22 20:54:56 +03:00  PurchasesListPage.OnAppearing
+System.NotSupportedException: SQLite does not support expressions of type ...
+   at Microsoft.EntityFrameworkCore.Sqlite.Query.Internal...
+   at Oab.Data.LedgerStore.GetDocumentsAsync(...) in ...LedgerStore.cs:line 66
+```
+
+| Property | Value | Reason |
+|---|---|---|
+| **Never throws** | every method swallows its own failures | Every caller is a catch block, several on a dying process. A logger that can fail turns a handled error into the crash it was written to prevent. This is the only empty `catch` in the codebase. |
+| **Timestamps are `InvariantCulture`** | `2026-07-22 20:54:56 +03:00` | The app sets the thread culture to `ar`. A record dated `١٤٤٧/٠١/٢٦` in the Umm al-Qura calendar cannot be lined up against a bug report. |
+| **Takes its path as a constructor argument** | not `FileSystem.AppDataDirectory` internally | Testable against a temp file with no device. |
+| **UTF-8 with a BOM, `'\n'` newlines** | same as the backup summary (D12) | An exception message can contain Arabic, and these files get opened in Notepad. |
+| **Capped at 64 KB** | drops the oldest records, keeps the newest half | It gets read into memory and attached to a share sheet. |
+
+Trimming cuts at a **record boundary** and says so (`(older entries dropped)`).
+Cutting at an arbitrary byte offset would leave the file starting halfway through
+a stack trace, which reads as a different exception than the one that happened.
+
+`ErrorLog.Current` is a static assigned by `UseOab`, the same shape as
+`LocalizationManager.Current`. It is also registered in DI as the **same
+instance**, so the backup screen and the process-wide handlers share one file and
+one lock. The static exists because `RunSafelyAsync` is itself static and the
+process-wide handlers run where there is no DI scope to ask; every use of it is
+null-conditional, so a view model constructed in a test logs nowhere and cares
+not at all.
+
+### Getting the log off the phone
+
+A log sitting in the app's private directory on a phone with no cable is not
+evidence, it is a file. The backup screen grows a fourth card — **Send error
+report** — which copies the log to the cache under the same
+`{shop}-{date}-errors.txt` naming as the backups and hands it to the share sheet
+([05 §4](05-modules.md#4-backup)).
+
+The card is **hidden unless something has actually been logged**
+(`BackupViewModel.HasErrorLog`). On a healthy phone the offer is noise, and a
+button whose purpose a shopkeeper cannot guess is a button that makes the app
+feel broken. Because it is a file on disk rather than observable state, nothing
+tells the UI when it changes: the page calls `Refresh()` on appearing and after
+every action.
+
+### What it found immediately
+
+The handler was installed, the Windows head was launched, and 25 seconds later
+`errors.log` contained a `NotSupportedException` from
+`PurchasesListPage.OnAppearing`: SQLite cannot `ORDER BY` a `DateTimeOffset`, so
+`LedgerStore.GetDocumentsAsync` and `GetEntriesForPartyAsync` **threw every
+single time the purchases list or the party statement was opened**. Both were
+covered only by `InMemoryLedgerStore`, which sorts in C# and therefore cannot
+fail that way. Fixed by sorting client-side
+([03 §4](03-data-layer.md#client-side-evaluation-and-why)), and pinned by three
+new real-SQLite tests.
+
+Two of six screens did not work, and nothing said so. That is the whole argument
+for this section.
+
+## 10. Party statement — shared detail screen
 
 Files: [`Views/PartyStatementPage.xaml`](../src/Oab.App/Views/PartyStatementPage.xaml),
 [`.xaml.cs`](../src/Oab.App/Views/PartyStatementPage.xaml.cs),
@@ -378,11 +536,10 @@ Anything can be corrected, including a correction — the rule is uniform ("this
 row's number should have been X") and uniform rules have no edge cases. Zero is
 accepted and means "this never happened".
 
-**Exception handling.** The page now funnels `OnAppearing` and the tap handler
-through a private `RunAsync` that turns an exception into an alert, the same
-shape as `BackupPage`. `async void` handlers otherwise take the process down with
-no message, and correcting money is the last place that is acceptable. The global
-handler is still the next roadmap item; this is the local half.
+**Exception handling.** `OnAppearing` and the tap handler funnel through the
+shared `RunSafelyAsync` (§9). This page's private `RunAsync` — one of the two
+copies that motivated hoisting it — is gone. Correcting money is the last place a
+silent crash is acceptable, and now the failure is both shown and recorded.
 
 ### The fourth amount parser
 
@@ -393,10 +550,10 @@ digits. That is one gap with four call sites, tracked in
 [10 §4](10-status.md#-arabic-indic-digits-can-be-displayed-but-not-typed) — the
 fix is a shared parser in Core, and it has to land in all four.
 
-## 10. Test coverage
+## 11. Test coverage
 
 [`tests/Oab.App.Tests/PartyStatementViewModelTests.cs`](../tests/Oab.App.Tests/PartyStatementViewModelTests.cs)
-— 23 of the suite's 41 tests.
+— 23 of the suite's 59 tests.
 
 *Reading the statement:* running-balance accumulation, newest-first ordering with
 the header matching the last balance, backdated entries, the sale→payment-in
@@ -411,6 +568,19 @@ a payment is corrected in the payment's own direction, a correction can itself b
 corrected, the five cases that post nothing (a negative amount; a blank,
 whitespace, or null note; and the amount already recorded), and the exact text of
 both prompts.
+
+[`ErrorLogTests.cs`](../tests/Oab.App.Tests/ErrorLogTests.cs) — 17 tests against
+real files in the temp directory, because the whole value of the class is what it
+does when the file system misbehaves and a fake file system would only prove the
+fake works. Record contents (context, type, message, stack, the inner-exception
+chain), append order, `HasEntries` / `ReadAll` / `Clear`, **writing to an
+impossible path not throwing**, a null exception object being recorded rather
+than dropped, invariant timestamps under `ar-SA`, one marker per record, and the
+four trimming rules: unchanged under the limit, oldest dropped over it, the cut
+landing on a record boundary, and a real file staying capped across 600 writes.
+
+`BackupViewModelTests.ErrorLogCard_IsHiddenUntilSomethingHasGoneWrong` pins the
+one thing a shopkeeper would notice.
 
 ---
 

@@ -237,6 +237,12 @@
   <data name="Backup_ShareTitle" xml:space="preserve">
     <value>نسخة احتياطية للمحل</value>
   </data>
+  <data name="Backup_ShareLog" xml:space="preserve">
+    <value>إرسال تقرير الأخطاء</value>
+  </data>
+  <data name="Backup_ShareLogHint" xml:space="preserve">
+    <value>واجه التطبيق مشكلة مؤخرًا. إرسال هذا الملف إلى من ركّب لك التطبيق هو ما يسمح بإصلاحها.</value>
+  </data>
   <data name="Backup_YouOwe" xml:space="preserve">
     <value>عليك</value>
   </data>

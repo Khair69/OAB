@@ -22,6 +22,13 @@ Two gaps found in the code that shaped this plan — **both now closed:**
 
 The engine is ahead of the app. This month closes that gap.
 
+**A third thing, learned the hard way in Week 1.** Both of those methods, once
+wired up, turned out never to have run: SQLite cannot `ORDER BY` a
+`DateTimeOffset`, and no test had ever called them against a real database. The
+global exception handler found it within half a minute of being installed.
+Assume, from here on, that **a store method with no real-SQLite test is not
+written yet** — it is a guess that compiles.
+
 ---
 
 ## Week 1 — Make the ledger trustworthy
@@ -49,17 +56,37 @@ Nothing else matters if these are missing.
   gesture — and because the action sheet is the only thing that makes the feature
   discoverable. *Still to do: watch a real person get through three stacked
   dialogs on a phone.*
-- [ ] **Global exception handler** — the `async void` event handlers can crash
-  silently. Log to a shareable file. `BackupPage` and `PartyStatementPage` each
-  now carry a private `RunAsync`; that duplication is the signal to hoist it.
+- [x] **Global exception handler** — two layers. `Page.RunSafelyAsync` (one
+  extension method, not a base class, so a module can still hold a plain
+  `ContentPage`) now wraps *every* `async void` handler and `OnAppearing` in the
+  app and all four modules; the two private `RunAsync` copies are gone.
+  Underneath it, `AppDomain` / `TaskScheduler` / Android / WinUI handlers
+  installed in `UseOab` **before `UseMauiApp`**, so a migration crash in the
+  `OabApp` constructor is covered too. Everything lands in a 64 KB
+  `errors.log` the backup screen can share — that card is hidden until something
+  has actually gone wrong. The handler records; it deliberately does not keep a
+  crashed app alive, because a ledger in an unknown state can write a wrong
+  number.
+  **It paid for itself in 25 seconds:** the first launch after installing it
+  logged a `NotSupportedException` proving that
+  **the purchases list and the party statement had been failing on every open** —
+  SQLite cannot `ORDER BY` a `DateTimeOffset`, and neither store method had a
+  test against a real database. Both fixed, three regression tests added.
+
+**Week 1 is complete.** All four items are done; two of them are still waiting on
+a human (a restore onto a second phone, and a real person getting through the
+correction flow's three dialogs).
 
 ## Week 2 — Real phone, real Arabic, real release
 
 Everything so far is verified on Windows. That proves almost nothing about a
-cheap Android phone in Arabic.
+cheap Android phone in Arabic — and, as Week 1 discovered, "verified on Windows"
+had been quietly untrue for two screens.
 
 - **Run on actual hardware.** Verify RTL layout, Arabic font rendering,
   `DatePicker` under `ar`, the numeric keyboard, and the decimal separator.
+  **Then read `errors.log` from the backup screen**, whether or not anything
+  looked wrong. That habit is the whole return on Week 1's last item.
 - **Arabic-Indic digit input.** `TryParseAmount` only tries CurrentCulture then
   Invariant — if a user types ٥٠ it likely fails. We render those digits but
   can't read them back. Four call sites now, including the correction amount.

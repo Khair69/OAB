@@ -30,7 +30,7 @@ public class BackupViewModelTests
         await c.Ledger.RecordPurchaseAsync(supplier.Id, 500m, paidNow: false, DateTimeOffset.Now);
         await c.Ledger.RecordSaleAsync(customer.Id, 80m, paidNow: false, DateTimeOffset.Now);
 
-        var vm = new BackupViewModel(new NoopBackup(), c.Store, c.Config, c.Localization);
+        var vm = new BackupViewModel(new NoopBackup(), c.Store, c.Config, c.Localization, c.ErrorLog);
         var text = await vm.BuildSummaryTextAsync();
 
         Assert.Contains("Test Shop", text, StringComparison.Ordinal);
@@ -45,11 +45,30 @@ public class BackupViewModelTests
     public async Task Summary_OnAnEmptyBook_IsStillReadable()
     {
         var c = new VmContext();
-        var vm = new BackupViewModel(new NoopBackup(), c.Store, c.Config, c.Localization);
+        var vm = new BackupViewModel(new NoopBackup(), c.Store, c.Config, c.Localization, c.ErrorLog);
 
         var text = await vm.BuildSummaryTextAsync();
 
         Assert.Contains("Test Shop", text, StringComparison.Ordinal);
         Assert.Contains("Settled accounts: 0", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The card offering to send the error report is bound to this. On a phone
+    /// that has never crashed it must stay hidden, or every shop sees a button
+    /// they cannot explain.
+    /// </summary>
+    [Fact]
+    public void ErrorLogCard_IsHiddenUntilSomethingHasGoneWrong()
+    {
+        var c = new VmContext();
+        var vm = new BackupViewModel(new NoopBackup(), c.Store, c.Config, c.Localization, c.ErrorLog);
+
+        Assert.False(vm.HasErrorLog);
+
+        c.ErrorLog.Write("test", new InvalidOperationException("boom"));
+        vm.Refresh();
+
+        Assert.True(vm.HasErrorLog);
     }
 }

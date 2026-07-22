@@ -127,23 +127,29 @@ dotnet format
 
 ## 4. Test inventory
 
-**96 tests, all passing** (verified by running all three suites).
+**117 tests, all passing** (verified by running all three suites).
 
 | Suite | Target | Tests | Runs in CI | Covers |
 |---|---|---:|---|---|
 | [`Oab.Core.Tests`](../tests/Oab.Core.Tests) | `net10.0` | **42** | ✅ | Ledger math incl. correction arithmetic, `LedgerService`, money formatting, summary report |
-| [`Oab.Data.Tests`](../tests/Oab.Data.Tests) | `net10.0` | **13** | ✅ | Real SQLite + real migrations, decimal fidelity, role filtering, backup/restore |
-| [`Oab.App.Tests`](../tests/Oab.App.Tests) | `net10.0-windows10.0.19041.0` | **41** | ❌ (needs the MAUI workload) | View models: balance→text/colour, role filtering, pay-remaining, statement running balance, the correction flow, backup summary |
+| [`Oab.Data.Tests`](../tests/Oab.Data.Tests) | `net10.0` | **16** | ✅ | Real SQLite + real migrations, decimal fidelity, newest-first ordering, role filtering, backup/restore |
+| [`Oab.App.Tests`](../tests/Oab.App.Tests) | `net10.0-windows10.0.19041.0` | **59** | ❌ (needs the MAUI workload) | View models: balance→text/colour, role filtering, pay-remaining, statement running balance, the correction flow, backup summary; plus the error log |
 
 ### `Oab.App.Tests` breakdown
 
 | File | Tests | Focus |
 |---|---:|---|
 | `PartyStatementViewModelTests` | 23 | Running balance, ordering, the perspective colour matrix, Arabic labels; and the correction flow — balance moves while history does not, correcting to zero, the document's outstanding following, the five refusals, prompt text |
+| `ErrorLogTests` | 17 | Record contents and append order; **never throwing**, even writing to an impossible path; a null exception object; invariant timestamps under `ar-SA`; Arabic round-trip with a BOM; the four trimming rules |
 | `PurchasesViewModelTests` | 4 | Credit vs cash listing, pay-remaining, form validation |
 | `SuppliersViewModelTests` | 3 | You-owe display, payment settling, role filtering |
 | `CustomersViewModelTests` | 4 | Debt/collection cycle, partial payment, role filtering |
-| `BackupViewModelTests` | 2 | Localized summary content, empty book |
+| `BackupViewModelTests` | 3 | Localized summary content, empty book, the error-report card staying hidden until something is logged |
+
+`ErrorLogTests` and `Oab.Data.Tests` both write real files into the temp
+directory. That is deliberate in both cases: the value of `ErrorLog` is what it
+does when the file system misbehaves, and a fake file system would only prove the
+fake works.
 
 ### Shared test infrastructure
 
@@ -197,6 +203,24 @@ close that gap at the cost of a much slower pipeline.
 
 The MSBuild message about `MauiXamlInflator=SourceGen` on every MAUI project is
 informational — XAML is compiled at build time rather than inflated at runtime.
+
+## 6a. Reading the error log after a run
+
+Since the global exception handler landed
+([04 §9](04-app-shell.md#9-diagnostics--making-a-crash-leave-evidence)), a failure
+during desk testing leaves a file instead of vanishing. On Windows:
+
+```bash
+cat "$LOCALAPPDATA/User Name/com.companyname.oab.customer.template/Data/errors.log"
+```
+
+On a device, use the **Send error report** card on the backup screen. The path is
+always `FileSystem.AppDataDirectory/errors.log`; the folder name follows the
+head's `ApplicationId`, so it changes per shop.
+
+**Read it after any manual test session, even one that looked fine.** The first
+run after installation produced a `NotSupportedException` on two screens that had
+been reported as working.
 
 ## 7. Platform targets
 

@@ -1,5 +1,6 @@
 using Microsoft.Maui.Storage;
 using Oab.App;
+using Oab.App.Diagnostics;
 using Oab.App.Formatting;
 using Oab.App.Localization;
 using Oab.Core.Ledger;
@@ -34,6 +35,13 @@ internal sealed class VmContext
     public LocalizationManager Localization { get; }
     public IMoneyFormatter Money { get; }
     public ShopConfig Config { get; }
+
+    /// <summary>
+    /// Pointed at a unique path under the temp directory, so a view model that
+    /// logs writes somewhere harmless and two tests never share a file.
+    /// </summary>
+    public ErrorLog ErrorLog { get; } =
+        new(Path.Combine(Path.GetTempPath(), $"oab-test-{Guid.NewGuid():N}.log"));
 
     public VmContext(string culture = "en")
     {

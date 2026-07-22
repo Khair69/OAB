@@ -32,7 +32,8 @@ switching, per-shop wording, optional Arabic-Indic digits.
 src/Oab.Core          Money engine. Pure C#: Party, LedgerEntry, LedgerService. No UI/DB deps.
 src/Oab.Data          EF Core + SQLite: OabDbContext, LedgerStore, migrations.
 src/Oab.App           Shared MAUI shell: module host (IOabModule), OabShell flyout,
-                      localization (Strings.resx + ar), ShopConfig, money formatting.
+                      localization (Strings.resx + ar), ShopConfig, money formatting,
+                      Diagnostics/ (global exception handler + shareable errors.log).
 src/Oab.Modules/*     Optional features. Each is self-contained: pages, VMs, DI registration.
                       Backup is effectively mandatory — see below.
 customers/*           One tiny project per shop: ShopConfig + list of modules. ~40 lines.
@@ -85,9 +86,18 @@ dotnet build customers/Oab.Customer.Template -f net10.0-android               # 
 
 Test layout: `Oab.Core.Tests` (ledger math), `Oab.Data.Tests` (real SQLite +
 migrations), `Oab.App.Tests` (view models — balance→text/colour, role
-filtering, pay-remaining; runs headlessly on Windows). `Oab.TestSupport` holds
-the shared in-memory store. Only the first two run in CI, since the MAUI tests
-need the Windows MAUI workload.
+filtering, pay-remaining — plus the error log; runs headlessly on Windows).
+`Oab.TestSupport` holds the shared in-memory store. Only the first two run in
+CI, since the MAUI tests need the Windows MAUI workload.
+
+**Every new `ILedgerStore` method needs a test in `Oab.Data.Tests`, not only in
+`Oab.App.Tests`.** The in-memory store runs LINQ-to-Objects and will pass queries
+the SQLite provider refuses to translate — that gap hid a `NotSupportedException`
+on two shipped screens until the global exception handler surfaced it.
+
+After any manual run, read the crash log. It is at
+`FileSystem.AppDataDirectory/errors.log`, and on a device the backup screen has a
+**Send error report** card that shares it.
 
 Schema changes: edit entities in `Oab.Core`, mapping in `Oab.Data/OabDbContext`,
 then `dotnet ef migrations add <Name> --project src/Oab.Data`. Apps run
@@ -105,11 +115,17 @@ then `dotnet ef migrations add <Name> --project src/Oab.Data`. Apps run
 - **`.editorconfig`** drives code style; `dotnet format` keeps it consistent.
 - **CI** (`.github/workflows/ci.yml`) builds and tests `Oab.Core` + `Oab.Data`
   on every push/PR — the money engine, the part that must never break.
+- **Nothing fails silently.** Every `async void` handler goes through
+  `this.RunSafelyAsync(...)` (`Oab.App.Diagnostics`); anything that escapes is
+  caught process-wide and written to a shareable `errors.log`. There is no
+  console on a shopkeeper's phone, so an unlogged crash is a bug that can never
+  be fixed.
 
 ### Not in v1 (on purpose)
 
-Multi-device sync, cloud, receipt printing, barcode scanning, advanced reports.
-Backup for now = exporting the SQLite file (planned as a small module).
+Multi-device sync, cloud, receipt printing, barcode scanning, stock quantities,
+advanced reports, iOS. Backup is a `.db` snapshot plus a readable text summary,
+both sent through the Android share sheet — deliberately not cloud sync.
 
 ---
 

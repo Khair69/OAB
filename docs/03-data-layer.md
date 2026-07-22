@@ -82,7 +82,7 @@ erDiagram
 |---|---|---|
 | `Parties` | `Name` | Alphabetical list ordering |
 | `Documents` | `PartyId` | Per-party document lookup |
-| `Documents` | `OccurredAt` | The purchases list, ordered newest first |
+| `Documents` | `OccurredAt` | Date-range filtering. It no longer serves the purchases list's ordering — see §4 |
 | `DocumentLines` | `DocumentId` | Loading a document's lines |
 | `LedgerEntries` | `PartyId` | Balances and statements |
 | `LedgerEntries` | `DocumentId` | "Is this invoice paid?" |
@@ -138,7 +138,9 @@ Assert.Equal(0.3m, await _service.GetPartyBalanceAsync(party.Id));
 ```
 
 `Guid` and `DateTimeOffset` are likewise stored as TEXT — EF Core's default for
-SQLite.
+SQLite. `DateTimeOffset` carries a second consequence that cost the product two
+working screens: SQLite cannot **order** by one either, so both newest-first
+reads sort in C# (§4).
 
 ## 4. `LedgerStore` — [`LedgerStore.cs`](../src/Oab.Data/LedgerStore.cs)
 
@@ -157,23 +159,48 @@ Every read uses `AsNoTracking()` — nothing in the app mutates a loaded entity.
 | `GetPartiesAsync` | `WHERE includeArchived OR NOT IsArchived`, `ORDER BY Name`, **then role filtering in memory**. |
 | `AddDocumentAsync` | Inserts the document with its lines in one save. |
 | `GetDocumentAsync` | `Include(d => d.Lines)`. |
-| `GetDocumentsAsync` | Optional `kind` / `partyId` filters, `Include(Lines)`, `ORDER BY OccurredAt DESC`. |
+| `GetDocumentsAsync` | Optional `kind` / `partyId` filters and `Include(Lines)` in SQL, then **ordered newest-first in C#**. |
 | `AddEntriesAsync` | `AddRange` + one `SaveChangesAsync` — both entries of a cash purchase land in a single transaction. |
-| `GetEntriesForPartyAsync` | `ORDER BY OccurredAt DESC`. (Consumers that need a running balance re-sort ascending themselves — see [04 §9](04-app-shell.md#9-party-statement--shared-detail-screen).) |
+| `GetEntriesForPartyAsync` | `WHERE PartyId = …`, then **ordered newest-first in C#**. (Consumers that need a running balance re-sort ascending themselves — see [04 §10](04-app-shell.md#10-party-statement--shared-detail-screen).) |
 | `GetEntriesForDocumentAsync` | Unordered — callers only sum. |
 | `GetPartyBalanceAsync` | `SELECT Amount WHERE PartyId = …` then `.Sum()` **in C#**. |
 | `GetBalancesAsync` | `SELECT PartyId, Amount` for the whole table, then `GroupBy`/`Sum` in C#. Returns a dictionary; parties with no entries are simply absent, so callers use `GetValueOrDefault`. |
 
-### Two deliberate client-side evaluations
+### Client-side evaluation, and why
 
-Both are commented in the source, and both are correct *for this product's data
-sizes* — a shop has tens to hundreds of parties, not millions.
+Four reads finish their work in C# rather than in SQL. All are commented in the
+source, and all are correct *for this product's data sizes* — a shop has tens to
+hundreds of parties, not millions.
 
-1. **Role filtering.** `PartyRole` is a `[Flags]` enum and the matching rule
-   includes "`None` matches everything"; SQLite cannot translate that predicate.
-   Parties are loaded and filtered in memory.
-2. **Summing decimals.** Since amounts are TEXT (§3), `SUM()` in SQL would be
-   meaningless. Amounts are projected and summed in C#.
+| Read | Done in C# | Why |
+|---|---|---|
+| `GetPartiesAsync` role filter | filtering | `PartyRole` is a `[Flags]` enum whose matching rule includes "`None` matches everything" (D3). SQLite cannot translate that predicate. |
+| `GetPartyBalanceAsync`, `GetBalancesAsync` | summing | Amounts are TEXT (§3), so `SUM()` in SQL would be meaningless. |
+| `GetDocumentsAsync` | ordering | **SQLite has no `DateTimeOffset`.** |
+| `GetEntriesForPartyAsync` | ordering | Same. |
+
+The first two are design choices. **The last two are not** — they are a
+correctness fix.
+
+> `ORDER BY` on a `DateTimeOffset` is not silently evaluated client-side by EF
+> Core; it is **rejected at query-translation time** with
+> `NotSupportedException: SQLite does not support expressions of type
+> 'DateTimeOffset' in ORDER BY clauses`.
+>
+> Both methods used to sort in SQL, which meant the purchases list and the party
+> statement threw on **every single open**. Nothing caught it: no test in this
+> suite called either method, and the view-model tests use `InMemoryLedgerStore`,
+> which sorts in C# and cannot fail this way. It surfaced within 25 seconds of
+> the global exception handler being installed
+> ([04 §9](04-app-shell.md#what-it-found-immediately)).
+>
+> Now pinned by `Documents_ComeBackNewestFirst`,
+> `PartyEntries_ComeBackNewestFirst`, and `OccurredAt_KeepsItsUtcOffset_AcrossStorage`.
+
+Sorting after the fact is cheap here because the `WHERE` still runs server-side:
+`GetDocumentsAsync` sorts one shop's purchases and `GetEntriesForPartyAsync` sorts
+one party's entries — not the table. The `Documents.OccurredAt` index no longer
+serves the ordering, but it still serves the filter.
 
 `GetBalancesAsync` reading the entire `LedgerEntries` table is the one that will
 need attention first at scale; see
@@ -292,7 +319,7 @@ and reopen (`Backup_RestoreDone`).
 
 ## 8. Test coverage
 
-[`tests/Oab.Data.Tests`](../tests/Oab.Data.Tests) — **13 tests, all passing.**
+[`tests/Oab.Data.Tests`](../tests/Oab.Data.Tests) — **16 tests, all passing.**
 Every one runs against a **real SQLite file in the temp directory with the real
 migrations applied**; there is no in-memory EF provider anywhere in this suite,
 because an in-memory provider would not have caught the decimal-storage issue or
@@ -300,9 +327,14 @@ the WAL-sidecar issue.
 
 | File | Covers |
 |---|---|
-| `LedgerStoreSqliteTests` | Full purchase→payment flow persisted and balanced; exact decimal round-trip; archived parties hidden by default; **data survives reopening the file** (simulated app restart) |
+| `LedgerStoreSqliteTests` | Full purchase→payment flow persisted and balanced; exact decimal round-trip; archived parties hidden by default; **documents and party entries come back newest-first** and `OccurredAt` keeps its UTC offset; **data survives reopening the file** (simulated app restart) |
 | `PartyRoleFilterTests` | Supplier/customer separation; a party with both roles appearing in both lists; the legacy `None`-shows-everywhere rule |
 | `DatabaseBackupTests` | Snapshot → damage → restore recovers the exact book; `.pre-restore` copy exists and is itself valid; snapshot overwrites a stale file; a junk file is rejected and restore refuses it; a missing file is rejected; **a real but foreign SQLite database is rejected** |
+
+The three ordering tests were added *after* the bug they describe reached a
+running app. The lesson is narrower than "write more tests": **a store method
+with no test against real SQLite is a store method that has never run** — the
+in-memory fake will happily pass anything the LINQ provider would reject.
 
 `DatabaseBackupTests.Snapshot_ThenRestore_PreservesTheWholeBook` is the test
 that encodes the product promise: record 250 on credit and a 100 payment, take a

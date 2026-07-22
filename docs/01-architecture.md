@@ -45,7 +45,7 @@ knows nothing about MAUI.
 |---|---|---|---|
 | `src/Oab.Core` | `net10.0` | *(nothing)* | Domain entities, ledger math, `LedgerService`, money formatting, summary report |
 | `src/Oab.Data` | `net10.0` | Core | `OabDbContext`, `LedgerStore`, EF migrations, backup/restore |
-| `src/Oab.App` | `net10.0-android`, `net10.0-windows10.0.19041.0` | Core, Data | `OabApp`, `OabShell`, `IOabModule`, localization, `ShopConfig`, party statement page |
+| `src/Oab.App` | `net10.0-android`, `net10.0-windows10.0.19041.0` | Core, Data | `OabApp`, `OabShell`, `IOabModule`, localization, `ShopConfig`, diagnostics, party statement page |
 | `src/Oab.Modules/Oab.Modules.Purchases` | android, windows | App | Purchase log + new-purchase form |
 | `src/Oab.Modules/Oab.Modules.SupplierDebts` | android, windows | App | Supplier list with balances and payments |
 | `src/Oab.Modules/Oab.Modules.CustomerDebts` | android, windows | App | Customer list with debts and collections |
@@ -53,8 +53,8 @@ knows nothing about MAUI.
 | `customers/Oab.Customer.Template` | android, windows | App + all four modules | The app head to copy per shop |
 | `tests/Oab.TestSupport` | `net10.0` | Core | Shared `InMemoryLedgerStore` |
 | `tests/Oab.Core.Tests` | `net10.0` | Core, TestSupport | Ledger math and service (42 tests) |
-| `tests/Oab.Data.Tests` | `net10.0` | Data | Real SQLite + migrations + backup (13 tests) |
-| `tests/Oab.App.Tests` | `net10.0-windows10.0.19041.0` | App + all modules, TestSupport | View models (41 tests) |
+| `tests/Oab.Data.Tests` | `net10.0` | Data | Real SQLite + migrations + backup (16 tests) |
+| `tests/Oab.App.Tests` | `net10.0-windows10.0.19041.0` | App + all modules, TestSupport | View models + the error log (59 tests) |
 
 Projects are listed in [`OAB.slnx`](../OAB.slnx), the XML solution format.
 
@@ -89,7 +89,10 @@ sequenceDiagram
     participant Shell as OabShell
 
     MP->>UO: UseOab(shopConfig, modules...)
+    UO->>UO: new ErrorLog(AppDataDirectory/errors.log) — sets ErrorLog.Current
+    UO->>UO: GlobalExceptionHandler.Install(errorLog)
     UO->>DI: UseMauiApp&lt;OabApp&gt;()
+    UO->>DI: AddSingleton(errorLog)
     UO->>DI: AddSingleton(ShopConfig)
     UO->>DI: AddSingleton(LocalizationManager) — also sets LocalizationManager.Current
     UO->>DI: AddSingleton&lt;IMoneyFormatter, MoneyFormatter&gt;()
@@ -109,8 +112,12 @@ sequenceDiagram
     Shell->>Shell: build flyout from module nav items
 ```
 
-Three things to notice:
+Four things to notice:
 
+0. **The error log and the process-wide exception handlers are installed
+   first**, before `UseMauiApp`. Everything below that line — module
+   registration, the migration, the first page load — leaves a record if it
+   fails. ([04 §9](04-app-shell.md#9-diagnostics--making-a-crash-leave-evidence))
 1. **The schema is migrated in the `OabApp` constructor**, before any page can
    exist. Upgrades are therefore automatic and no screen ever sees a stale
    schema. ([`OabApp.cs`](../src/Oab.App/OabApp.cs))
@@ -126,6 +133,7 @@ Every service the app can resolve, and its lifetime.
 
 | Service | Lifetime | Registered by | Notes |
 |---|---|---|---|
+| `ErrorLog` | Singleton *(instance)* | `UseOab` | The same object as the static `ErrorLog.Current`, so the backup screen and the process-wide handlers share one file and one lock |
 | `ShopConfig` | Singleton | `UseOab` | The shop's whole configuration |
 | `LocalizationManager` | Singleton | `UseOab` | Factory also assigns the static `Current` |
 | `IMoneyFormatter` → `MoneyFormatter` | Singleton | `UseOab` | Binds `MoneyFormat` to config + culture |
@@ -205,8 +213,13 @@ and `Colors.Firebrick` without rendering anything.
 - View models guard re-entrancy with an `IsBusy` flag checked at the top of
   `LoadAsync` — `OnAppearing` can fire while a load is in flight.
 - Event handlers in code-behind are `async void` (unavoidable for MAUI events).
-  Only `BackupPage` funnels them through a try/catch helper; see
-  [10 — Status §4](10-status.md#4-known-gaps-and-risks).
+  **Every one of them** funnels through `Page.RunSafelyAsync`, which logs the
+  failure and turns it into a message; anything that still escapes is recorded by
+  the process-wide handlers installed in `UseOab`
+  ([04 §9](04-app-shell.md#9-diagnostics--making-a-crash-leave-evidence)).
+- `ErrorLog` serializes its writes under a lock and swallows its own failures.
+  It is called from a dying process on an arbitrary thread, so it has to be both
+  thread-safe and incapable of throwing.
 
 ---
 

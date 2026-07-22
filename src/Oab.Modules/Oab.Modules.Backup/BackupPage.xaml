@@ -39,6 +39,16 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- Hidden entirely until something has actually been logged. -->
+            <Border StrokeThickness="0" BackgroundColor="{AppThemeBinding Light=#FFF7E6, Dark=#33301F}"
+                    StrokeShape="RoundRectangle 12" IsVisible="{Binding HasErrorLog}">
+                <VerticalStackLayout Padding="16" Spacing="10">
+                    <Label Text="{oab:Tr Backup_ShareLog}" FontAttributes="Bold" FontSize="16" />
+                    <Label Text="{oab:Tr Backup_ShareLogHint}" FontSize="12" TextColor="Gray" />
+                    <Button Text="{oab:Tr Backup_ShareLog}" Clicked="OnShareLogClicked" />
+                </VerticalStackLayout>
+            </Border>
+
             <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
             <Label Text="{Binding Status}" FontSize="13" />
 

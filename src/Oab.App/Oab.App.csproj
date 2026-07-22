@@ -33,4 +33,12 @@
 	  <ProjectReference Include="..\Oab.Data\Oab.Data.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <!-- ErrorLog's record format and size-trimming are implementation details
+	       that still have to be pinned by tests: they decide whether a crash
+	       report is readable a month later. Exposing them as public API instead
+	       would be worse — this keeps the surface honest. -->
+	  <InternalsVisibleTo Include="Oab.App.Tests" />
+	</ItemGroup>
+
 </Project>

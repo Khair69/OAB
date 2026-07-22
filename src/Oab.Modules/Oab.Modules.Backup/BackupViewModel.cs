@@ -1,6 +1,7 @@
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Oab.App;
+using Oab.App.Diagnostics;
 using Oab.App.Localization;
 using Oab.Core.Ledger;
 using Oab.Core.Reporting;
@@ -17,13 +18,29 @@ public partial class BackupViewModel(
     IDatabaseBackup backup,
     ILedgerStore store,
     ShopConfig config,
-    LocalizationManager localization) : ObservableObject
+    LocalizationManager localization,
+    ErrorLog errorLog) : ObservableObject
 {
     [ObservableProperty]
     public partial string Status { get; set; } = "";
 
     [ObservableProperty]
     public partial bool IsBusy { get; set; }
+
+    /// <summary>
+    /// Whether anything has crashed since the log was last cleared. The page
+    /// hides the "send the error log" card unless this is true: on a healthy
+    /// phone the offer is noise, and a button whose purpose the shopkeeper cannot
+    /// guess is a button that makes the app feel broken.
+    /// </summary>
+    public bool HasErrorLog => errorLog.HasEntries;
+
+    /// <summary>
+    /// Re-reads <see cref="HasErrorLog"/>. It is a file on disk, not observable
+    /// state, so nothing tells the UI when it changes — the page asks on
+    /// appearing and after every action.
+    /// </summary>
+    public void Refresh() => OnPropertyChanged(nameof(HasErrorLog));
 
     /// <summary>Writes a restorable snapshot to the cache and returns its path.</summary>
     public async Task<string> CreateDatabaseSnapshotAsync(CancellationToken ct = default)
@@ -55,6 +72,21 @@ public partial class BackupViewModel(
         return LedgerSummaryReport.Build(
             config.ShopName, DateTimeOffset.Now, lines, labels,
             localization.Culture, config.CurrencySymbol, config.UseArabicIndicDigits);
+    }
+
+    /// <summary>
+    /// Copies the log into the cache under a shop-and-date filename and returns
+    /// its path. A copy rather than the original for two reasons: the share
+    /// target keeps a handle on the file while the app may still be appending to
+    /// it, and <c>errors.log</c> arriving in someone's WhatsApp says nothing
+    /// about which shop or which day it came from. Same directory and the same
+    /// naming as the backups, for the same reasons.
+    /// </summary>
+    public async Task<string> CreateErrorLogFileAsync(CancellationToken ct = default)
+    {
+        var path = Path.Combine(FileSystem.CacheDirectory, $"{FileStem()}-errors.txt");
+        await File.WriteAllTextAsync(path, errorLog.ReadAll(), new UTF8Encoding(true), ct);
+        return path;
     }
 
     public Task<bool> IsValidBackupAsync(string path, CancellationToken ct = default) =>

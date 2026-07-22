@@ -1,3 +1,4 @@
+using Oab.App.Diagnostics;
 using Oab.App.Formatting;
 using Oab.App.Localization;
 using Oab.App.Modules;
@@ -15,9 +16,17 @@ public static class OabAppBuilderExtensions
     /// </summary>
     public static MauiAppBuilder UseOab(this MauiAppBuilder builder, ShopConfig config, params IOabModule[] modules)
     {
+        // Before anything else, including UseMauiApp: from this line on, a crash
+        // anywhere — module registration, the OabApp constructor's Migrate() call
+        // (D10), the first page load — leaves a record instead of nothing.
+        var errorLog = new ErrorLog(Path.Combine(FileSystem.AppDataDirectory, "errors.log"));
+        ErrorLog.Current = errorLog;
+        GlobalExceptionHandler.Install(errorLog);
+
         builder.UseMauiApp<OabApp>();
 
         var services = builder.Services;
+        services.AddSingleton(errorLog);
         services.AddSingleton(config);
         services.AddSingleton(_ =>
         {

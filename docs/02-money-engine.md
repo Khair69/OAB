@@ -188,7 +188,7 @@ Returning **zero** is not an error: it means the entry already reads as the
 corrected amount. The caller must post nothing, because `RecordAdjustmentAsync`
 rejects an adjustment of zero. `PartyStatementViewModel` turns that case into a
 sentence rather than an exception — see
-[04 §9](04-app-shell.md#the-correction-flow).
+[04 §10](04-app-shell.md#the-correction-flow).
 
 ## 4. `LedgerService` — the use-case layer
 
@@ -258,7 +258,7 @@ the only method that takes an already-signed amount, and
 
 **Called from** `PartyStatementViewModel.CorrectAsync` — tap an entry on the
 party statement, say what it should have been, say why
-([04 §9](04-app-shell.md#the-correction-flow)). The `documentId` argument is
+([04 §10](04-app-shell.md#the-correction-flow)). The `documentId` argument is
 passed the corrected entry's own `DocumentId`, so correcting a purchase also
 corrects what that invoice still has outstanding.
 

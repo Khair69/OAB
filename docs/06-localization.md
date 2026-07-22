@@ -87,7 +87,7 @@ Revisit the wording once input is fixed.
 
 ## 4. Resource key catalogue
 
-**79 keys, both languages complete.** Files:
+**81 keys, both languages complete.** Files:
 [`Strings.resx`](../src/Oab.App/Resources/Strings.resx) (English, the neutral
 fallback) and [`Strings.ar.resx`](../src/Oab.App/Resources/Strings.ar.resx).
 
@@ -177,7 +177,7 @@ fallback) and [`Strings.ar.resx`](../src/Oab.App/Resources/Strings.ar.resx).
 ### Correct (9)
 
 The correction flow on the statement page
-([04 §9](04-app-shell.md#the-correction-flow)). Its own area rather than more
+([04 §10](04-app-shell.md#the-correction-flow)). Its own area rather than more
 `Statement_` keys, because a shop that rewords "Statement" has no reason to
 reword the correction dialogs with it.
 
@@ -202,7 +202,7 @@ purchase twice will look for exactly that.
 thing translators get wrong, and the concatenation reads correctly in both
 directions because the amount is rendered by `IMoneyFormatter`.
 
-### Backup (17)
+### Backup (19)
 
 | Key | English | Arabic | Used by |
 |---|---|---|---|
@@ -219,6 +219,8 @@ directions because the amount is rendered by `IMoneyFormatter`.
 | `Backup_RestoreInvalid` | That file is not a valid backup of this app. | هذا الملف ليس نسخة احتياطية صالحة لهذا التطبيق. | Validation failure |
 | `Backup_RestoreDone` | Restored. Please close and reopen the app. | تمت الاستعادة. أغلق التطبيق ثم افتحه من جديد. | Success |
 | `Backup_ShareTitle` | Shop backup | نسخة احتياطية للمحل | Share-sheet title |
+| `Backup_ShareLog` | Send error report | إرسال تقرير الأخطاء | Error-log card title + button + share-sheet title |
+| `Backup_ShareLogHint` | The app ran into a problem recently… | واجه التطبيق مشكلة مؤخرًا… | Error-log card hint |
 | `Backup_YouOwe` | You owe | عليك | Summary report heading |
 | `Backup_OwesYou` | Owed to you | لك | Summary report heading |
 | `Backup_Settled` | Settled accounts | حسابات خالصة | Summary report line |
@@ -252,7 +254,7 @@ deliberately drops the sign.
 
 ## 6. Adding a language
 
-1. Add `src/Oab.App/Resources/Strings.<culture>.resx` with all 79 keys. It is
+1. Add `src/Oab.App/Resources/Strings.<culture>.resx` with all 81 keys. It is
    picked up automatically — `Oab.App.csproj` has no per-file resource item, and
    `ResourceManager` resolves satellite assemblies by culture.
 2. Add the culture code to that shop's `ShopConfig.SupportedCultures`.

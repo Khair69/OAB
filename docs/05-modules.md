@@ -16,7 +16,7 @@ today. Each is a MAUI class library targeting `net10.0-android` and
 | [Backup](#4-backup) | `Backup_Title` | `backup` | Backup | **always — see §5** |
 
 Plus one screen that is **not** a module: the [party
-statement](04-app-shell.md#9-party-statement--shared-detail-screen), which lives
+statement](04-app-shell.md#10-party-statement--shared-detail-screen), which lives
 in `Oab.App` because both list modules push it.
 
 ### Screen map
@@ -35,7 +35,7 @@ graph LR
 ```
 
 The correction flow is not a screen — it is dialogs over the statement page
-([04 §9](04-app-shell.md#the-correction-flow)) — but it is the only place in the
+([04 §10](04-app-shell.md#the-correction-flow)) — but it is the only place in the
 product where an existing number can be changed, so it belongs on this map.
 
 ---
@@ -206,13 +206,21 @@ on again.
 
 ### The page
 
-Three cards over an activity indicator and a status label:
+Four cards over an activity indicator and a status label:
 
 | Card | Action |
 |---|---|
 | **Send backup file** | `CreateDatabaseSnapshotAsync()` → `Share.Default.RequestAsync(ShareFileRequest)` — the Android share sheet, so WhatsApp-to-self or Drive both work |
 | **Send readable summary** | `CreateSummaryFileAsync()` → same share sheet |
 | **Restore from a backup** (styled red on a red-tinted card) | confirm → file picker → validate → restore |
+| **Send error report** (amber, and **hidden unless something has been logged**) | `CreateErrorLogFileAsync()` → same share sheet |
+
+The error-report card lives here rather than on a settings screen because this is
+the one screen a shopkeeper already understands as "send something out of the
+app". It is bound to `HasErrorLog`: on a healthy phone the offer is noise, and a
+button whose purpose the shopkeeper cannot guess is a button that makes the app
+feel broken. Full reasoning in
+[04 §9](04-app-shell.md#getting-the-log-off-the-phone).
 
 ### `BackupViewModel`
 
@@ -221,6 +229,8 @@ Three cards over an activity indicator and a status label:
 | `CreateDatabaseSnapshotAsync` | Writes `{stem}.db` into `FileSystem.CacheDirectory` via `IDatabaseBackup.CreateSnapshotAsync`, returns the path |
 | `CreateSummaryFileAsync` | Writes `{stem}.txt`, **UTF-8 with BOM** (`new UTF8Encoding(true)`) so Arabic text opens correctly in Windows Notepad and most Android viewers |
 | `BuildSummaryTextAsync` | Reads all parties (**including archived**) and all balances, builds `SummaryLine`s, supplies localized `SummaryLabels`, and calls `LedgerSummaryReport.Build` with the shop name, now, culture, currency symbol and digit setting |
+| `CreateErrorLogFileAsync` | Copies `ErrorLog.ReadAll()` into `{stem}-errors.txt` in the cache, same encoding and naming as the summary. A **copy**, because the share target holds a handle while the app may still be appending — and because `errors.log` arriving in someone's WhatsApp says nothing about which shop or which day it came from |
+| `HasErrorLog` / `Refresh()` | Whether anything has been logged. It is a file on disk, not observable state, so nothing tells the UI when it changes: the page calls `Refresh()` on appearing and after every action |
 | `IsValidBackupAsync` / `RestoreAsync` | Thin pass-throughs to `IDatabaseBackup` |
 | `FileStem()` | `{ShopName with invalid filename chars and spaces → '-'}-{yyyy-MM-dd-HHmm}` |
 
@@ -237,23 +247,35 @@ On success the user is told to close and reopen the app.
 
 ### The `async void` funnel
 
-Every handler on this page runs through:
+This page's `RunAsync` was the original of the funnel that is now shared by every
+page as `Page.RunSafelyAsync`
+([04 §9](04-app-shell.md#runsafelyasync--the-page-level-funnel)). What is left
+here is only what is specific to this screen:
 
 ```csharp
-private async Task RunAsync(Func<Task> action)
+private async Task RunAsync(Func<Task> action, [CallerMemberName] string context = "")
 {
-    if (_viewModel.IsBusy) return;
+    if (_viewModel.IsBusy) return;                  // every action here is slow
     _viewModel.IsBusy = true; _viewModel.Status = "";
-    try     { await action(); }
-    catch (Exception ex) { _viewModel.Status = $"{Loc["Common_Error"]}: {ex.Message}"; }
-    finally { _viewModel.IsBusy = false; }
+    try
+    {
+        await this.RunSafelyAsync(action,
+            onError: ex => _viewModel.Status = $"{Loc["Common_Error"]}: {ex.Message}",
+            context: context);
+    }
+    finally { _viewModel.IsBusy = false; _viewModel.Refresh(); }
 }
 ```
 
-MAUI event handlers must be `async void`, so an escaping exception would crash
-the app rather than surface. This funnel turns a failure into a message. **It is
-the only such funnel in the codebase** — the other modules' handlers are
-unguarded; see [10 §4](10-status.md#4-known-gaps-and-risks).
+Three details:
+
+- **The busy guard stays local** — it is about this page's slow operations, not
+  about exceptions.
+- **`onError` writes to the status label**, not an alert. An alert raised on top
+  of a share sheet is a dialog nobody sees.
+- **`context` is forwarded explicitly.** Without it, `[CallerMemberName]` inside
+  `RunSafelyAsync` would resolve to `RunAsync` and every log record from this page
+  would name the wrapper instead of the button that was pressed.
 
 ---
 
@@ -311,7 +333,12 @@ app:
   screen.**
 - Add every new key to **both** `Strings.resx` and `Strings.ar.resx`.
 - Guard `LoadAsync` with an `IsBusy` check — `OnAppearing` can re-enter.
-- Wrap `async void` handlers in a try/catch (copy `BackupPage.RunAsync`).
+- **Run every `async void` handler and every `OnAppearing` override through
+  `this.RunSafelyAsync(...)`** (`using Oab.App.Diagnostics;`). An unwrapped
+  handler is a silent crash on a shopkeeper's phone, and there is no second
+  chance to find out what it was. If the module has a `[RelayCommand]` that
+  writes, wrap its body too — a faulted `AsyncRelayCommand` rethrows onto the
+  sync context.
 - Use `{AppThemeBinding Light=#F2F2F7, Dark=#2C2C2E}` for card backgrounds, a
   `Border` with `StrokeShape="RoundRectangle 12"`, `Margin="0,4"`, `Padding="14"`,
   and give the `CollectionView` an `EmptyView`.
@@ -323,6 +350,11 @@ instance to `UseOab`. Position in the argument list = position in the flyout.
 **5. Test it.** Add a class to `tests/Oab.App.Tests` and use the `VmContext`
 helper, which assembles the real dependency graph with only the database and
 device preferences faked.
+
+**6. If it adds an `ILedgerStore` method, test that against real SQLite too.**
+`InMemoryLedgerStore` runs LINQ-to-Objects, so it will happily pass a query the
+SQLite provider refuses to translate. That gap hid a `NotSupportedException` on
+two shipped screens; see [03 §4](03-data-layer.md#client-side-evaluation-and-why).
 
 ---
 

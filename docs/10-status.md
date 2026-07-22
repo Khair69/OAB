@@ -4,7 +4,7 @@
 
 ---
 
-An honest inventory of what exists, as of the correction-flow change
+An honest inventory of what exists, as of the global-exception-handler change
 (2026-07-22). This is the document to read before deciding what to build next;
 the schedule for doing so is [`ROADMAP.md`](ROADMAP.md).
 
@@ -30,8 +30,9 @@ the schedule for doing so is [`ROADMAP.md`](ROADMAP.md).
 | Per-shop wording via `LabelOverrides` | ✅ Complete | `ShopConfig` |
 | Automatic schema migration on upgrade | ✅ Implemented, ❗untested with real data | `OabApp` |
 | Module system + per-shop composition | ✅ Complete (one head exists) | `IOabModule`, `UseOab` |
+| **Global exception handling — every handler funnelled, every crash logged** | ✅ Complete | `Oab.App/Diagnostics` |
+| **Shareable error log** | ✅ Complete | `ErrorLog`, backup screen card |
 | Arabic-Indic digit **input** | ❌ Missing | see §4 |
-| Global exception handling | ⚠️ Backup and statement pages only | see §4 |
 | Editing a party (phone, note, archive) | ❌ No screen | see §3 |
 | Document line items in the UI | ❌ Engine only | see §3 |
 | Sales module (cash sales, receipts) | ❌ Not built | — |
@@ -58,13 +59,24 @@ Six screens exist. That is the whole product surface today.
 | Party statement | `PartyStatementPage.xaml` | Tapping a supplier or customer card |
 
 The correction flow adds no screen — it is an action sheet and two prompts on the
-statement page ([04 §9](04-app-shell.md#the-correction-flow)).
+statement page ([04 §10](04-app-shell.md#the-correction-flow)). The error log
+adds no screen either: it is a fourth card on the backup page, hidden until
+something has actually gone wrong.
+
+**Two of these six did not work.** Until the global exception handler was
+installed, the purchases list and the party statement threw
+`NotSupportedException` on every open — see §4.
 
 ## 3. Engine capability vs UI exposure
 
-The engine is ahead of the app. These are all **implemented and tested in
-`Oab.Core` / `Oab.Data`** but have no screen calling them — the cheapest
-features to ship, because the hard half is already done and covered by tests.
+The engine is ahead of the app. These have no screen calling them — the cheapest
+features to ship, because the hard half is already written.
+
+> **Read "tested" narrowly here.** `UpdatePartyAsync`, `GetDocumentAsync`, and
+> `GetEntriesForDocumentAsync` have no test against real SQLite. `GetDocumentsAsync`
+> did not either, and it threw on every call for as long as it has existed (§4).
+> Treat an untested store method as unwritten until something has run it against
+> a real database.
 
 | Capability | Implemented in | Called by the app? |
 |---|---|---|
@@ -80,8 +92,7 @@ features to ship, because the hard half is already done and covered by tests.
 
 `RecordAdjustmentAsync` used to head this list. It now has a caller
 (`PartyStatementViewModel.CorrectAsync`), which is why the most damaging entry in
-§4 is gone. The rest are still the cheapest features to ship, because the hard
-half is already done and covered by tests.
+§4 is gone.
 
 ## 4. Known gaps and risks
 
@@ -93,7 +104,7 @@ Tap an entry on the party statement → "Correct this entry" → what it should 
 been → why. `LedgerMath.CorrectionDelta` turns the magnitude into a signed
 adjustment; `RecordAdjustmentAsync` appends it with the corrected entry's
 `DocumentId`, so the invoice's outstanding follows. Nothing is edited or deleted.
-Full description in [04 §9](04-app-shell.md#the-correction-flow), reasoning in
+Full description in [04 §10](04-app-shell.md#the-correction-flow), reasoning in
 D19–D20.
 
 Not yet verified on a real phone in Arabic — like everything else here.
@@ -113,22 +124,67 @@ remembers to use protects nobody.
 crash with no recovery UI. The sequence *install v1 → enter real data → install
 v2 carrying a new migration → confirm nothing is lost* has not been performed.
 
-### 🟠 Unhandled exceptions crash the app silently
+Slightly better than it was: the global handler is installed **before**
+`UseMauiApp`, so a migration crash now writes to `errors.log` and the next launch
+can say what happened. It is still a crash — there is no recovery UI, and adding
+one is a separate piece of work.
 
-MAUI event handlers must be `async void`. `BackupPage` and now
-`PartyStatementPage` funnel theirs through a local try/catch that turns a failure
-into a message; **no other page does.** An exception from
-`SuppliersPage.OnRecordPaymentClicked`, `CustomersPage.OnRecordDebtClicked`,
-`PurchasesListPage.OnNewPurchaseClicked`, or their `OnAppearing` overrides
-terminates the process with no message and no log.
+### ✅ Closed — unhandled exceptions crashed the app silently
 
-Two pages having their own private copy of `RunAsync` is itself the signal that
-this wants to be shared.
+Two layers now ([04 §9](04-app-shell.md#9-diagnostics--making-a-crash-leave-evidence),
+reasoning in D21):
 
-*Fix:* one `RunAsync` helper on a shared page base or extension, applied
-everywhere, plus a global handler on `AppDomain.UnhandledException` /
-`TaskScheduler.UnobservedTaskException` writing to a shareable log file. This is
-the next roadmap item.
+1. **`Page.RunSafelyAsync`** — one extension method, applied to *every*
+   `async void` handler and `OnAppearing` override in the app and in all four
+   modules. It logs the failure with the name of the handler it escaped from and
+   turns it into a message. The two private `RunAsync` copies are gone;
+   `BackupPage` keeps only its busy guard and its status-label reporting.
+2. **`GlobalExceptionHandler`** — `AppDomain.UnhandledException`,
+   `TaskScheduler.UnobservedTaskException`, `AndroidEnvironment.UnhandledExceptionRaiser`,
+   and WinUI's handler, installed in `UseOab` **before `UseMauiApp`**, so the
+   `Database.Migrate()` call in the `OabApp` constructor is covered too.
+
+Everything lands in `FileSystem.AppDataDirectory/errors.log`, capped at 64 KB,
+and the backup screen can share it. `NewPurchaseViewModel.SaveAsync` — a
+`[RelayCommand]`, not an event handler, and therefore never covered by the page
+funnel — is guarded too.
+
+The handler **records; it does not recover.** Nothing marks an exception handled
+or keeps the process alive: a ledger carrying on in an unknown state can write a
+wrong number, which is worse than closing.
+
+### ✅ Closed — two screens threw on every open
+
+Found by the above, 25 seconds after it was first run.
+
+`LedgerStore.GetDocumentsAsync` and `GetEntriesForPartyAsync` ordered by
+`OccurredAt` **in SQL**. SQLite has no `DateTimeOffset`, and EF Core rejects the
+query at translation time rather than falling back to client evaluation:
+
+```
+System.NotSupportedException: SQLite does not support expressions of type
+'DateTimeOffset' in ORDER BY clauses.
+   at Oab.Data.LedgerStore.GetDocumentsAsync(...) LedgerStore.cs:line 66
+   at Oab.Modules.Purchases.PurchasesListViewModel.LoadAsync() ...
+```
+
+So **the purchases list and the party statement failed every single time they
+were opened**, and this document previously listed both as ✅ Complete.
+
+*Why nothing caught it:* neither method had a test against real SQLite, and the
+41 view-model tests use `InMemoryLedgerStore`, which runs LINQ-to-Objects and
+cannot reproduce a translation failure. The rule that follows — **a store method
+with no real-SQLite test has never actually run** — is now in
+[05 §6](05-modules.md#6-writing-a-new-module).
+
+*Fixed* by ordering in C# after a server-side `WHERE`
+([03 §4](03-data-layer.md#client-side-evaluation-and-why), D22), pinned by
+`Documents_ComeBackNewestFirst`, `PartyEntries_ComeBackNewestFirst`, and
+`OccurredAt_KeepsItsUtcOffset_AcrossStorage`.
+
+*What it says about the rest of this document:* every ✅ above means "the code
+exists and its tests pass", not "a person has seen it work". The two remaining
+🔴 items are exactly the ones that need a person.
 
 ### 🟠 Arabic-Indic digits can be displayed but not typed
 
@@ -149,6 +205,11 @@ Everything so far is Windows-verified. Unproven on a cheap Android phone: RTL
 layout under `ar`, Arabic font rendering, the `DatePicker` under `ar`, the
 numeric keyboard, and the decimal separator. Any of these could be a
 show-stopper and none of them will surface on a desktop.
+
+The `ORDER BY DateTimeOffset` bug is the argument for taking this seriously:
+"Windows-verified" turned out to include two screens that had never successfully
+loaded. When the phone test happens, **read `errors.log` afterwards** — that is
+now the difference between "it seemed fine" and knowing.
 
 ### 🟡 N+1 query in the purchases list
 
@@ -234,18 +295,24 @@ it on real hardware in real hands.
 Derived from the sections above, weighted by damage prevented per hour spent:
 
 1. ~~**Correction flow**~~ — done.
-2. **Global exception handler** — one shared helper, applied everywhere. Two
-   pages now carry a private copy, which is the signal to hoist it.
+2. ~~**Global exception handler**~~ — done, and it immediately found a
+   `NotSupportedException` on two screens.
 3. **Arabic-Indic digit input** — a small pure function in Core, with tests, then
    four call sites.
 4. **Run on a real Android phone in Arabic** — may invalidate assumptions. The
    correction flow's three stacked dialogs are the first thing to watch a real
-   person get through.
+   person get through. **Read `errors.log` afterwards**, whether or not anything
+   looked wrong.
 5. **Restore onto a second device** — closes the existential risk.
 6. **Upgrade test with real data.**
 7. **Release engineering** — app id, icon, keystore, permissions.
 8. Then the roadmap's Week 3–4 items: CashDay, tap-count reduction, the N+1 fix,
    scale testing, second shop, pilot.
+
+**A standing item, promoted by what step 2 found:** any `ILedgerStore` method
+without a test against real SQLite should be treated as untested code, not as
+working code. Three exist today — `UpdatePartyAsync`, `GetDocumentAsync`, and
+`GetEntriesForDocumentAsync` — and the first two have no caller either (§3).
 
 ---
 

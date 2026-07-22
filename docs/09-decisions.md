@@ -63,7 +63,7 @@ vanish from every list the moment they upgraded. Instead they all keep appearing
 exactly where they did.
 
 **Cost.** The filter cannot be translated to SQL, so it runs in memory
-([03 §4](03-data-layer.md#two-deliberate-client-side-evaluations)). Party counts
+([03 §4](03-data-layer.md#client-side-evaluation-and-why)). Party counts
 are small; this is the right trade.
 
 **Pinned by** `PartyRoleFilterTests.UntaggedLegacyParty_ShowsInEveryList`.
@@ -84,7 +84,7 @@ screens). Words carry the meaning; colour is only an accelerant.
 
 **Consequence.** `PartyStatementViewModel` needs a `perspective` parameter
 telling it which list opened it, so the colour matches the row that was tapped.
-See [04 §9](04-app-shell.md#wording-and-colour).
+See [04 §10](04-app-shell.md#wording-and-colour).
 
 ---
 
@@ -378,6 +378,76 @@ long-press earns its dependency then.
 
 ---
 
+## D21 — The global handler records; it does not recover
+
+**Context.** MAUI event handlers must be `async void`, and an exception escaping
+one goes straight to the process. On a shopkeeper's phone that means the app
+disappears mid-tap, and the only available bug report is *"it closed"* — no
+console, no debugger, no crash reporter, no network.
+
+**Decision.** Two layers. Every `async void` handler funnels through
+`Page.RunSafelyAsync`, which **catches, logs, and shows a message**. Everything
+that still escapes — a background task nobody awaited, a throw on a thread with
+no page, the startup path itself — is caught by process-wide handlers installed
+in `UseOab` before `UseMauiApp`, which **log and let the process die**.
+
+**Why the second layer does not swallow.** `WinUI`'s handler can set
+`e.Handled = true` and keep the app alive. It deliberately does not. By the time
+a global handler runs, the exception has already unwound past every place that
+knew what was being attempted; the app's state is unknown. A ledger that carries
+on in an unknown state can write a wrong number, and a wrong number is worse than
+a closed app — the whole product is "every number is explainable". The goal of
+the second layer is not survival, it is that **the next launch can explain what
+happened**.
+
+**Why it is installed first.** `Database.Migrate()` runs in the `OabApp`
+constructor (D10), where a failure is a startup crash with no recovery UI. If the
+handler were installed after `UseMauiApp`, the single worst failure mode in the
+product would be the one it did not cover.
+
+**Why the logger can never throw.** Every caller is a catch block, several of
+them on a dying process. `ErrorLog` swallows its own failures — the only empty
+`catch` in the codebase — because a logger that can fail turns a handled error
+into the crash it was written to prevent.
+
+**Why a static `ErrorLog.Current` as well as a DI registration.**
+`RunSafelyAsync` is a static extension method and the process-wide handlers run
+where there is no DI scope to ask. Both point at the **same instance**, so the
+backup screen shares the file and the lock. Every use is null-conditional, so a
+view model constructed directly in a test logs nowhere.
+
+**Cost.** A second static alongside `LocalizationManager.Current`, and an empty
+`catch` that will look like a mistake to anyone who has not read this entry.
+
+**Immediate return.** Installed, launched once on Windows, and 25 seconds later
+the log named a `NotSupportedException` that had been thrown on **every open of
+the purchases list and the party statement** — two of six screens, broken, with
+nothing saying so. See
+[04 §9](04-app-shell.md#what-it-found-immediately).
+
+---
+
+## D22 — Newest-first ordering happens in C#, not SQL
+
+**Context.** `GetDocumentsAsync` and `GetEntriesForPartyAsync` ordered by
+`OccurredAt` in the query. SQLite has no `DateTimeOffset` type, and EF Core does
+not silently fall back to client evaluation for it — it **rejects the query at
+translation time**.
+
+**Decision.** Filter in SQL, order in C#.
+
+**Why this was invisible.** The two methods had no test against real SQLite;
+the view-model tests use `InMemoryLedgerStore`, which runs LINQ-to-Objects and
+cannot reproduce a translation failure. The rule that follows:
+**a store method with no real-SQLite test has never actually run.**
+
+**Cost.** The `Documents.OccurredAt` index no longer serves the ordering. It is
+close to free anyway — the `WHERE` still runs server-side, so what gets sorted is
+one shop's purchases or one party's entries, never the table. Same family as D6:
+SQLite's type system is thin, and the price is paid in C#.
+
+---
+
 ## Rejected alternatives, briefly
 
 | Considered | Rejected because |
@@ -390,7 +460,10 @@ long-press earns its dependency then.
 | **Fork per customer** | Drowns after ~5 shops (D7). |
 | **Editing an entry in place** | The one thing the append-only rule exists to prevent. A crossed-out line in a notebook is still readable; an erased one is not (D1, D19). |
 | **`CommunityToolkit.Maui` for a long-press gesture** | A package for one gesture on one screen (D20). |
-| **In-memory EF provider for data tests** | Would not have caught the decimal-storage or WAL-sidecar problems. The data tests use real files. |
+| **In-memory EF provider for data tests** | Would not have caught the decimal-storage, WAL-sidecar, or `ORDER BY DateTimeOffset` problems. The data tests use real files (D22). |
+| **A base `OabPage` class carrying the exception funnel** | Every page in every module would have to inherit it. `RunSafelyAsync` is an extension method so a module can hold a plain `ContentPage` (D21). |
+| **Swallowing the exception in the global handler to keep the app alive** | Carrying on in an unknown state can write a wrong number, which is worse than closing (D21). |
+| **A third-party crash reporter** | Needs a network. The product's defining constraint is that it works offline, indefinitely. |
 
 ---
 

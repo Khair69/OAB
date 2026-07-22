@@ -1,4 +1,5 @@
 using System.Globalization;
+using Oab.App.Diagnostics;
 using Oab.App.Localization;
 using Oab.App.Views;
 using Oab.Core.Domain;
@@ -15,27 +16,32 @@ public partial class CustomersPage : ContentPage
         BindingContext = _viewModel = viewModel;
     }
 
+    // Every handler below is `async void` — MAUI gives no choice — so each one
+    // funnels through RunSafelyAsync, which logs and shows a message instead of
+    // letting the process die mid-tap.
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _viewModel.LoadAsync();
+        await this.RunSafelyAsync(() => _viewModel.LoadAsync());
     }
 
-    private async void OnAddCustomerClicked(object? sender, EventArgs e)
-    {
-        var loc = LocalizationManager.Current!;
-        var name = await DisplayPromptAsync(
-            loc["Customers_AddCustomer"], loc["Customers_NamePrompt"],
-            loc["Common_Save"], loc["Common_Cancel"]);
-        if (!string.IsNullOrWhiteSpace(name))
-            await _viewModel.AddCustomerAsync(name);
-    }
+    private async void OnAddCustomerClicked(object? sender, EventArgs e) =>
+        await this.RunSafelyAsync(async () =>
+        {
+            var loc = LocalizationManager.Current!;
+            var name = await DisplayPromptAsync(
+                loc["Customers_AddCustomer"], loc["Customers_NamePrompt"],
+                loc["Common_Save"], loc["Common_Cancel"]);
+            if (!string.IsNullOrWhiteSpace(name))
+                await _viewModel.AddCustomerAsync(name);
+        });
 
     /// <summary>Tapping the card anywhere but a button opens that customer's statement.</summary>
     private async void OnCustomerTapped(object? sender, TappedEventArgs e)
     {
         if ((sender as BindableObject)?.BindingContext is CustomerRow row)
-            await PartyStatementPage.PushAsync(Navigation, row.Party.Id, PartyRole.Customer);
+            await this.RunSafelyAsync(() => PartyStatementPage.PushAsync(Navigation, row.Party.Id, PartyRole.Customer));
     }
 
     private async void OnRecordDebtClicked(object? sender, EventArgs e)
@@ -43,11 +49,14 @@ public partial class CustomersPage : ContentPage
         if ((sender as BindableObject)?.BindingContext is not CustomerRow row)
             return;
 
-        var loc = LocalizationManager.Current!;
-        var text = await DisplayPromptAsync(
-            loc["Customers_RecordDebt"], loc["Customers_DebtPrompt"],
-            loc["Common_Save"], loc["Common_Cancel"], keyboard: Keyboard.Numeric);
-        await ApplyAmountAsync(text, amount => _viewModel.RecordDebtAsync(row, amount));
+        await this.RunSafelyAsync(async () =>
+        {
+            var loc = LocalizationManager.Current!;
+            var text = await DisplayPromptAsync(
+                loc["Customers_RecordDebt"], loc["Customers_DebtPrompt"],
+                loc["Common_Save"], loc["Common_Cancel"], keyboard: Keyboard.Numeric);
+            await ApplyAmountAsync(text, amount => _viewModel.RecordDebtAsync(row, amount));
+        });
     }
 
     private async void OnCollectPaymentClicked(object? sender, EventArgs e)
@@ -55,11 +64,14 @@ public partial class CustomersPage : ContentPage
         if ((sender as BindableObject)?.BindingContext is not CustomerRow row)
             return;
 
-        var loc = LocalizationManager.Current!;
-        var text = await DisplayPromptAsync(
-            loc["Customers_CollectPayment"], loc["Customers_PaymentPrompt"],
-            loc["Common_Save"], loc["Common_Cancel"], keyboard: Keyboard.Numeric);
-        await ApplyAmountAsync(text, amount => _viewModel.RecordPaymentAsync(row, amount));
+        await this.RunSafelyAsync(async () =>
+        {
+            var loc = LocalizationManager.Current!;
+            var text = await DisplayPromptAsync(
+                loc["Customers_CollectPayment"], loc["Customers_PaymentPrompt"],
+                loc["Common_Save"], loc["Common_Cancel"], keyboard: Keyboard.Numeric);
+            await ApplyAmountAsync(text, amount => _viewModel.RecordPaymentAsync(row, amount));
+        });
     }
 
     private async Task ApplyAmountAsync(string? text, Func<decimal, Task> action)

@@ -237,6 +237,12 @@
   <data name="Backup_ShareTitle" xml:space="preserve">
     <value>Shop backup</value>
   </data>
+  <data name="Backup_ShareLog" xml:space="preserve">
+    <value>Send error report</value>
+  </data>
+  <data name="Backup_ShareLogHint" xml:space="preserve">
+    <value>The app ran into a problem recently. Sending this file to whoever set up the app is what lets it be fixed.</value>
+  </data>
   <data name="Backup_YouOwe" xml:space="preserve">
     <value>You owe</value>
   </data>

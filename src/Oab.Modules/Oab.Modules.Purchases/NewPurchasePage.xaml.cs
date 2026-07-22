@@ -1,3 +1,5 @@
+using Oab.App.Diagnostics;
+
 namespace Oab.Modules.Purchases;
 
 public partial class NewPurchasePage : ContentPage
@@ -13,6 +15,6 @@ public partial class NewPurchasePage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _viewModel.LoadAsync();
+        await this.RunSafelyAsync(() => _viewModel.LoadAsync());
     }
 }

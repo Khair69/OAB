@@ -63,11 +63,15 @@ public class LedgerStore(IDbContextFactory<OabDbContext> contextFactory) : ILedg
     public async Task<IReadOnlyList<Document>> GetDocumentsAsync(DocumentKind? kind = null, Guid? partyId = null, CancellationToken ct = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(ct);
-        return await db.Documents.AsNoTracking()
+        var documents = await db.Documents.AsNoTracking()
             .Include(d => d.Lines)
             .Where(d => (kind == null || d.Kind == kind) && (partyId == null || d.PartyId == partyId))
-            .OrderByDescending(d => d.OccurredAt)
             .ToListAsync(ct);
+        // Ordered here, not in SQL: SQLite has no DateTimeOffset, so ORDER BY on
+        // one throws NotSupportedException at query-translation time. The filter
+        // above still runs server-side, so this sorts one shop's purchases, not
+        // the table. Same family of problem as decimal-as-TEXT (D6).
+        return [.. documents.OrderByDescending(d => d.OccurredAt)];
     }
 
     public async Task AddEntriesAsync(IReadOnlyList<LedgerEntry> entries, CancellationToken ct = default)
@@ -80,10 +84,13 @@ public class LedgerStore(IDbContextFactory<OabDbContext> contextFactory) : ILedg
     public async Task<IReadOnlyList<LedgerEntry>> GetEntriesForPartyAsync(Guid partyId, CancellationToken ct = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(ct);
-        return await db.LedgerEntries.AsNoTracking()
+        var entries = await db.LedgerEntries.AsNoTracking()
             .Where(e => e.PartyId == partyId)
-            .OrderByDescending(e => e.OccurredAt)
             .ToListAsync(ct);
+        // Client-side for the same reason as GetDocumentsAsync above. One party's
+        // entries, so the set is small — and PartyStatementViewModel re-sorts
+        // ascending anyway to accumulate the running balance.
+        return [.. entries.OrderByDescending(e => e.OccurredAt)];
     }
 
     public async Task<IReadOnlyList<LedgerEntry>> GetEntriesForDocumentAsync(Guid documentId, CancellationToken ct = default)
