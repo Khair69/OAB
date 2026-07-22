@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Oab.Core\Oab.Core.csproj" />
+    <ProjectReference Include="..\Oab.TestSupport\Oab.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

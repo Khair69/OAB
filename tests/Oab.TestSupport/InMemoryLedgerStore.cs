@@ -1,9 +1,12 @@
 using Oab.Core.Domain;
 using Oab.Core.Ledger;
 
-namespace Oab.Core.Tests;
+namespace Oab.TestSupport;
 
-/// <summary>In-memory ILedgerStore for exercising LedgerService without a database.</summary>
+/// <summary>
+/// In-memory <see cref="ILedgerStore"/> for exercising the money engine and the
+/// view models without a database. Shared by every test project.
+/// </summary>
 public class InMemoryLedgerStore : ILedgerStore
 {
     private readonly Dictionary<Guid, Party> _parties = [];

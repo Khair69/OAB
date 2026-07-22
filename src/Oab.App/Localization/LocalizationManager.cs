@@ -19,6 +19,7 @@ public class LocalizationManager : INotifyPropertyChanged
         new("Oab.App.Resources.Strings", typeof(LocalizationManager).Assembly);
 
     private readonly ShopConfig _config;
+    private readonly IPreferences _preferences;
 
     /// <summary>Set once by UseOab so XAML markup extensions can reach the instance.</summary>
     public static LocalizationManager? Current { get; internal set; }
@@ -27,10 +28,16 @@ public class LocalizationManager : INotifyPropertyChanged
 
     public CultureInfo Culture { get; private set; }
 
-    public LocalizationManager(ShopConfig config)
+    /// <summary>
+    /// <paramref name="preferences"/> is where the chosen language is persisted
+    /// (normally <c>Preferences.Default</c>); it is injected so this class — and
+    /// every view model that depends on it — can be unit-tested without a device.
+    /// </summary>
+    public LocalizationManager(ShopConfig config, IPreferences preferences)
     {
         _config = config;
-        var saved = Preferences.Default.Get(CulturePreferenceKey, config.DefaultCulture);
+        _preferences = preferences;
+        var saved = preferences.Get(CulturePreferenceKey, config.DefaultCulture);
         Culture = SafeCulture(saved) ?? SafeCulture(config.DefaultCulture) ?? CultureInfo.InvariantCulture;
         ApplyToThreads();
     }
@@ -57,7 +64,7 @@ public class LocalizationManager : INotifyPropertyChanged
             return;
 
         Culture = culture;
-        Preferences.Default.Set(CulturePreferenceKey, culture.Name);
+        _preferences.Set(CulturePreferenceKey, culture.Name);
         ApplyToThreads();
         // "Item" invalidates all indexer bindings at once.
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item"));

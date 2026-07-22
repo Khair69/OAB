@@ -56,10 +56,21 @@ Per-shop wording without code: `LabelOverrides = { ["ar:Purchases_Title"] = "ا�
 ### Developing
 
 ```powershell
-dotnet test                                      # money engine + SQLite store suites
+# Fast, cross-platform: money engine + SQLite store (this is what CI runs)
+dotnet test tests/Oab.Core.Tests
+dotnet test tests/Oab.Data.Tests
+# View-model / presentation tests — MAUI-targeted, Windows only
+dotnet test tests/Oab.App.Tests
+
 dotnet build customers/Oab.Customer.Template -f net10.0-windows10.0.19041.0   # run on the dev PC
 dotnet build customers/Oab.Customer.Template -f net10.0-android               # APK
 ```
+
+Test layout: `Oab.Core.Tests` (ledger math), `Oab.Data.Tests` (real SQLite +
+migrations), `Oab.App.Tests` (view models — balance→text/colour, role
+filtering, pay-remaining; runs headlessly on Windows). `Oab.TestSupport` holds
+the shared in-memory store. Only the first two run in CI, since the MAUI tests
+need the Windows MAUI workload.
 
 Schema changes: edit entities in `Oab.Core`, mapping in `Oab.Data/OabDbContext`,
 then `dotnet ef migrations add <Name> --project src/Oab.Data`. Apps run

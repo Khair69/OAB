@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    MAUI-targeted test project. It targets a single platform (Windows) so the
+    view models — which touch Microsoft.Maui types (Colors, FlowDirection,
+    IPreferences) — can be exercised headlessly by the test runner on this dev
+    machine. It is NOT run in the ubuntu CI job (that would need the MAUI
+    workload); run it locally on Windows with `dotnet test`.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseMaui>true</UseMaui>
+    <EnableDefaultMauiItems>false</EnableDefaultMauiItems>
+    <OutputType>Library</OutputType>
+    <IsPackable>false</IsPackable>
+    <WindowsPackageType>None</WindowsPackageType>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="$(TestSdkVersion)" />
+    <PackageReference Include="xunit" Version="$(XunitVersion)" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="$(XunitRunnerVersion)" />
+    <PackageReference Include="coverlet.collector" Version="$(CoverletVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Oab.App\Oab.App.csproj" />
+    <ProjectReference Include="..\..\src\Oab.Modules\Oab.Modules.Purchases\Oab.Modules.Purchases.csproj" />
+    <ProjectReference Include="..\..\src\Oab.Modules\Oab.Modules.SupplierDebts\Oab.Modules.SupplierDebts.csproj" />
+    <ProjectReference Include="..\..\src\Oab.Modules\Oab.Modules.CustomerDebts\Oab.Modules.CustomerDebts.csproj" />
+    <ProjectReference Include="..\Oab.TestSupport\Oab.TestSupport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

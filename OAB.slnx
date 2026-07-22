@@ -13,7 +13,9 @@
     <Project Path="src/Oab.Modules/Oab.Modules.SupplierDebts/Oab.Modules.SupplierDebts.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Oab.App.Tests/Oab.App.Tests.csproj" />
     <Project Path="tests/Oab.Core.Tests/Oab.Core.Tests.csproj" />
     <Project Path="tests/Oab.Data.Tests/Oab.Data.Tests.csproj" />
+    <Project Path="tests/Oab.TestSupport/Oab.TestSupport.csproj" />
   </Folder>
 </Solution>

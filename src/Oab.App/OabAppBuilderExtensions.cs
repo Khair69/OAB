@@ -20,7 +20,7 @@ public static class OabAppBuilderExtensions
         services.AddSingleton(config);
         services.AddSingleton(_ =>
         {
-            var localization = new LocalizationManager(config);
+            var localization = new LocalizationManager(config, Preferences.Default);
             LocalizationManager.Current = localization;
             return localization;
         });
