@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Build & test money engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Only the pure logic layers (Oab.Core, Oab.Data) and their test suites
+      # are built here — they don't need the MAUI/Android workloads, so CI stays
+      # fast and reliable. These cover the part that must never be wrong: money.
+      - name: Test money engine
+        run: dotnet test tests/Oab.Core.Tests/Oab.Core.Tests.csproj -c Release
+
+      - name: Test data layer
+        run: dotnet test tests/Oab.Data.Tests/Oab.Data.Tests.csproj -c Release

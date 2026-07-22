@@ -1,0 +1,39 @@
+<Project>
+
+  <!--
+    Settings shared by every project in the repo. Individual csproj files no
+    longer need to repeat Nullable/ImplicitUsings/LangVersion.
+  -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- Static analysis on; code style is enforced at build (severities come
+         from .editorconfig, which keeps most at 'suggestion' so builds stay green). -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <!--
+    Single source of truth for package versions. We deliberately do NOT use
+    Central Package Management (Directory.Packages.props): it breaks the MAUI
+    SDK's implicit global usings in app-head projects, and this repo creates one
+    app head per customer. Referencing these $(...)-variables from each csproj
+    gives the same "bump in one place" benefit without fighting MAUI.
+    Microsoft.Maui.Controls is omitted on purpose — it rides $(MauiVersion),
+    which the installed MAUI workload sets for every project at once.
+  -->
+  <PropertyGroup Label="Shared package versions">
+    <EfCoreVersion>10.0.9</EfCoreVersion>
+    <SqlitePclRawVersion>3.0.3</SqlitePclRawVersion>
+    <MvvmToolkitVersion>8.4.2</MvvmToolkitVersion>
+    <LoggingDebugVersion>10.0.0</LoggingDebugVersion>
+    <TestSdkVersion>17.14.1</TestSdkVersion>
+    <XunitVersion>2.9.3</XunitVersion>
+    <XunitRunnerVersion>3.1.4</XunitRunnerVersion>
+    <CoverletVersion>6.0.4</CoverletVersion>
+  </PropertyGroup>
+
+</Project>

@@ -65,6 +65,19 @@ Schema changes: edit entities in `Oab.Core`, mapping in `Oab.Data/OabDbContext`,
 then `dotnet ef migrations add <Name> --project src/Oab.Data`. Apps run
 `Database.Migrate()` at startup, so upgrades are automatic.
 
+### Repo conventions
+
+- **`Directory.Build.props`** — shared build settings (nullable, implicit
+  usings, analyzers) and the single list of package versions as `$(...)`
+  variables. Bump a dependency there, not in each csproj.
+- **No Central Package Management.** CPM breaks the MAUI SDK's implicit global
+  usings in app-head projects, and this repo creates one head per customer, so
+  versions are shared via the props variables above instead.
+- **`global.json`** pins the .NET SDK feature band for reproducible builds.
+- **`.editorconfig`** drives code style; `dotnet format` keeps it consistent.
+- **CI** (`.github/workflows/ci.yml`) builds and tests `Oab.Core` + `Oab.Data`
+  on every push/PR — the money engine, the part that must never break.
+
 ### Not in v1 (on purpose)
 
 Multi-device sync, cloud, receipt printing, barcode scanning, advanced reports.

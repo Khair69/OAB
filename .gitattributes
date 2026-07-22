@@ -1,0 +1,22 @@
+# Normalize line endings to LF everywhere (repo and working tree) so the
+# .editorconfig eol rule and CI agree on all platforms.
+* text=auto eol=lf
+
+# Language-aware diffs
+*.cs   text eol=lf diff=csharp
+*.md   text eol=lf
+
+# Binary assets — never normalize or diff
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.ico      binary
+*.svg      text
+*.ttf      binary
+*.otf      binary
+*.apk      binary
+*.aab      binary
+*.keystore binary
+*.snk      binary
+*.db       binary

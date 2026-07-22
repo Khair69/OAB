@@ -1,4 +1,5 @@
 using Oab.App.Localization;
+using CoreMoneyFormat = Oab.Core.Formatting.MoneyFormat;
 
 namespace Oab.App.Formatting;
 
@@ -8,28 +9,12 @@ public interface IMoneyFormatter
     string Format(decimal amount);
 }
 
+/// <summary>
+/// Binds the pure <see cref="CoreMoneyFormat"/> to this shop's config and the
+/// current UI culture. All the actual formatting logic lives (and is tested) in Core.
+/// </summary>
 public class MoneyFormatter(ShopConfig config, LocalizationManager localization) : IMoneyFormatter
 {
-    private static readonly char[] ArabicIndicDigits =
-        ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-
-    public string Format(decimal amount)
-    {
-        var text = Math.Abs(amount).ToString("N2", localization.Culture);
-        if (config.UseArabicIndicDigits)
-            text = MapDigits(text);
-        return config.CurrencySymbol.Length == 0 ? text : $"{text} {config.CurrencySymbol}";
-    }
-
-    // .NET number formatting ignores NativeDigits, so shape the digits ourselves.
-    private static string MapDigits(string text)
-    {
-        var chars = text.ToCharArray();
-        for (var i = 0; i < chars.Length; i++)
-        {
-            if (chars[i] is >= '0' and <= '9')
-                chars[i] = ArabicIndicDigits[chars[i] - '0'];
-        }
-        return new string(chars);
-    }
+    public string Format(decimal amount) =>
+        CoreMoneyFormat.Format(amount, localization.Culture, config.CurrencySymbol, config.UseArabicIndicDigits);
 }
