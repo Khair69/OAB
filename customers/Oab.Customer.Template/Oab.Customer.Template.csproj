@@ -72,6 +72,7 @@
 	  <ProjectReference Include="..\..\src\Oab.App\Oab.App.csproj" />
 	  <ProjectReference Include="..\..\src\Oab.Modules\Oab.Modules.Purchases\Oab.Modules.Purchases.csproj" />
 	  <ProjectReference Include="..\..\src\Oab.Modules\Oab.Modules.SupplierDebts\Oab.Modules.SupplierDebts.csproj" />
+	  <ProjectReference Include="..\..\src\Oab.Modules\Oab.Modules.CustomerDebts\Oab.Modules.CustomerDebts.csproj" />
 	</ItemGroup>
 
 </Project>

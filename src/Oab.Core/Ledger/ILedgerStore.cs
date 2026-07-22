@@ -12,7 +12,12 @@ public interface ILedgerStore
     Task AddPartyAsync(Party party, CancellationToken ct = default);
     Task UpdatePartyAsync(Party party, CancellationToken ct = default);
     Task<Party?> GetPartyAsync(Guid id, CancellationToken ct = default);
-    Task<IReadOnlyList<Party>> GetPartiesAsync(bool includeArchived = false, CancellationToken ct = default);
+    /// <summary>
+    /// Parties for a list/picker. When <paramref name="role"/> is given, only
+    /// parties carrying that role are returned — plus untagged
+    /// (<see cref="PartyRole.None"/>) parties, which belong to every list.
+    /// </summary>
+    Task<IReadOnlyList<Party>> GetPartiesAsync(bool includeArchived = false, PartyRole? role = null, CancellationToken ct = default);
 
     Task AddDocumentAsync(Document document, CancellationToken ct = default);
     Task<Document?> GetDocumentAsync(Guid id, CancellationToken ct = default);

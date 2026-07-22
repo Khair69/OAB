@@ -39,7 +39,7 @@ public partial class NewPurchaseViewModel(
     public async Task LoadAsync()
     {
         Suppliers.Clear();
-        foreach (var party in await store.GetPartiesAsync())
+        foreach (var party in await store.GetPartiesAsync(role: PartyRole.Supplier))
             Suppliers.Add(party);
     }
 
@@ -58,7 +58,7 @@ public partial class NewPurchaseViewModel(
         var newName = NewSupplierName.Trim();
         if (newName.Length > 0)
         {
-            supplier = new Party { Name = newName };
+            supplier = new Party { Name = newName, Roles = PartyRole.Supplier };
             await store.AddPartyAsync(supplier);
         }
         if (supplier is null)

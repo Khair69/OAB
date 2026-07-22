@@ -108,4 +108,37 @@
   <data name="Suppliers_Empty" xml:space="preserve">
     <value>No suppliers yet. Add one with the + button.</value>
   </data>
+  <data name="Customers_Title" xml:space="preserve">
+    <value>Customers</value>
+  </data>
+  <data name="Customers_OwesYou" xml:space="preserve">
+    <value>Owes you</value>
+  </data>
+  <data name="Customers_YouOwe" xml:space="preserve">
+    <value>You owe them</value>
+  </data>
+  <data name="Customers_Settled" xml:space="preserve">
+    <value>Settled</value>
+  </data>
+  <data name="Customers_AddCustomer" xml:space="preserve">
+    <value>Add customer</value>
+  </data>
+  <data name="Customers_NamePrompt" xml:space="preserve">
+    <value>Customer name</value>
+  </data>
+  <data name="Customers_Empty" xml:space="preserve">
+    <value>No customers yet. Add one with the + button.</value>
+  </data>
+  <data name="Customers_RecordDebt" xml:space="preserve">
+    <value>Record debt</value>
+  </data>
+  <data name="Customers_DebtPrompt" xml:space="preserve">
+    <value>How much did they take on credit?</value>
+  </data>
+  <data name="Customers_CollectPayment" xml:space="preserve">
+    <value>Collect payment</value>
+  </data>
+  <data name="Customers_PaymentPrompt" xml:space="preserve">
+    <value>How much did they pay?</value>
+  </data>
 </root>

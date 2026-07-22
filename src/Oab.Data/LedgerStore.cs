@@ -31,13 +31,18 @@ public class LedgerStore(IDbContextFactory<OabDbContext> contextFactory) : ILedg
         return await db.Parties.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
     }
 
-    public async Task<IReadOnlyList<Party>> GetPartiesAsync(bool includeArchived = false, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Party>> GetPartiesAsync(bool includeArchived = false, PartyRole? role = null, CancellationToken ct = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(ct);
-        return await db.Parties.AsNoTracking()
+        var parties = await db.Parties.AsNoTracking()
             .Where(p => includeArchived || !p.IsArchived)
             .OrderBy(p => p.Name)
             .ToListAsync(ct);
+        // Flag-enum matching (incl. the "None shows everywhere" rule) is done in
+        // memory: party counts per shop are small and SQLite can't translate it.
+        return role is PartyRole wanted
+            ? parties.Where(p => p.Roles.MatchesFilter(wanted)).ToList()
+            : parties;
     }
 
     public async Task AddDocumentAsync(Document document, CancellationToken ct = default)

@@ -108,4 +108,37 @@
   <data name="Suppliers_Empty" xml:space="preserve">
     <value>لا موردين بعد. أضف واحدًا بزر +</value>
   </data>
+  <data name="Customers_Title" xml:space="preserve">
+    <value>الزبائن</value>
+  </data>
+  <data name="Customers_OwesYou" xml:space="preserve">
+    <value>عليه</value>
+  </data>
+  <data name="Customers_YouOwe" xml:space="preserve">
+    <value>له عندك</value>
+  </data>
+  <data name="Customers_Settled" xml:space="preserve">
+    <value>خالص</value>
+  </data>
+  <data name="Customers_AddCustomer" xml:space="preserve">
+    <value>إضافة زبون</value>
+  </data>
+  <data name="Customers_NamePrompt" xml:space="preserve">
+    <value>اسم الزبون</value>
+  </data>
+  <data name="Customers_Empty" xml:space="preserve">
+    <value>لا زبائن بعد. أضف واحدًا بزر +</value>
+  </data>
+  <data name="Customers_RecordDebt" xml:space="preserve">
+    <value>تسجيل دين</value>
+  </data>
+  <data name="Customers_DebtPrompt" xml:space="preserve">
+    <value>كم أخذ بالدَّين؟</value>
+  </data>
+  <data name="Customers_CollectPayment" xml:space="preserve">
+    <value>تحصيل دفعة</value>
+  </data>
+  <data name="Customers_PaymentPrompt" xml:space="preserve">
+    <value>كم دفع؟</value>
+  </data>
 </root>

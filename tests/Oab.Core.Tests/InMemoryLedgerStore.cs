@@ -27,9 +27,11 @@ public class InMemoryLedgerStore : ILedgerStore
     public Task<Party?> GetPartyAsync(Guid id, CancellationToken ct = default) =>
         Task.FromResult(_parties.GetValueOrDefault(id));
 
-    public Task<IReadOnlyList<Party>> GetPartiesAsync(bool includeArchived = false, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<Party>>(
-            _parties.Values.Where(p => includeArchived || !p.IsArchived).ToList());
+    public Task<IReadOnlyList<Party>> GetPartiesAsync(bool includeArchived = false, PartyRole? role = null, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<Party>>(_parties.Values
+            .Where(p => includeArchived || !p.IsArchived)
+            .Where(p => role is not PartyRole wanted || p.Roles.MatchesFilter(wanted))
+            .ToList());
 
     public Task AddDocumentAsync(Document document, CancellationToken ct = default)
     {

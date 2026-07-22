@@ -33,7 +33,7 @@ public partial class SuppliersViewModel(
         IsBusy = true;
         try
         {
-            var parties = await store.GetPartiesAsync();
+            var parties = await store.GetPartiesAsync(role: PartyRole.Supplier);
             var balances = await store.GetBalancesAsync();
 
             Suppliers.Clear();
@@ -67,7 +67,7 @@ public partial class SuppliersViewModel(
         var trimmed = name.Trim();
         if (trimmed.Length == 0)
             return;
-        await store.AddPartyAsync(new Party { Name = trimmed });
+        await store.AddPartyAsync(new Party { Name = trimmed, Roles = PartyRole.Supplier });
         await LoadAsync();
     }
 

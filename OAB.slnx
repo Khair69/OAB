@@ -8,6 +8,7 @@
     <Project Path="src/Oab.Data/Oab.Data.csproj" />
   </Folder>
   <Folder Name="/src/Oab.Modules/">
+    <Project Path="src/Oab.Modules/Oab.Modules.CustomerDebts/Oab.Modules.CustomerDebts.csproj" />
     <Project Path="src/Oab.Modules/Oab.Modules.Purchases/Oab.Modules.Purchases.csproj" />
     <Project Path="src/Oab.Modules/Oab.Modules.SupplierDebts/Oab.Modules.SupplierDebts.csproj" />
   </Folder>

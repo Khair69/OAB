@@ -16,6 +16,12 @@ public class Party
 
     public string? Note { get; set; }
 
+    /// <summary>
+    /// Which lists this party appears in. A UI hint, not a source of truth —
+    /// balances ignore it. <see cref="PartyRole.None"/> shows everywhere.
+    /// </summary>
+    public PartyRole Roles { get; set; }
+
     /// <summary>Hidden from pickers/lists but kept for history. Parties are never deleted.</summary>
     public bool IsArchived { get; set; }
 }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Oab.App;
+using Oab.Modules.CustomerDebts;
 using Oab.Modules.Purchases;
 using Oab.Modules.SupplierDebts;
 
@@ -28,7 +29,8 @@ public static class MauiProgram
                     // LabelOverrides = new Dictionary<string, string> { ["ar:Purchases_Title"] = "الدفتر" },
                 },
                 new PurchasesModule(),
-                new SupplierDebtsModule())
+                new SupplierDebtsModule(),
+                new CustomerDebtsModule())
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
