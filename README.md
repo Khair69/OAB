@@ -12,6 +12,14 @@ things are paid. Deliberately *less* than a POS — small shops avoid POS system
 because they're complicated and full of unused features, so each shop gets a
 build with **only** the features they asked for.
 
+### Documentation
+
+Full technical documentation lives in **[`docs/`](docs/README.md)** —
+architecture, the money engine, the data layer, every screen, localization,
+per-shop customization, build/release, the design decisions and their reasoning,
+and an honest status inventory. Start at the
+[documentation index](docs/README.md).
+
 ### Stack
 
 .NET 10 · .NET MAUI (Android first, Windows for desk testing) · SQLite + EF Core
@@ -113,6 +121,12 @@ Backup for now = exporting the SQLite file (planned as a small module).
 دُفع المبلغ أم لا. التطبيق مقصود أن يكون **أبسط** من أنظمة نقاط البيع — فأصحاب
 المحلات يتجنبونها لأنها معقّدة ومليئة بميزات لا يستعملونها، لذلك كل محل يحصل
 على نسخة فيها **فقط** الميزات التي طلبها.
+
+### التوثيق
+
+التوثيق التقني الكامل موجود في مجلد ‎[`docs/`](docs/README.md)‎ (بالإنجليزية):
+البنية، ومحرك الحسابات، وطبقة البيانات، وكل شاشة، والترجمة، والتخصيص لكل محل،
+والبناء والإصدار، والقرارات التصميمية وأسبابها، وجرد صريح لما أُنجز وما تبقّى.
 
 ### التقنيات
 
