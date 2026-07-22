@@ -1,6 +1,7 @@
 using Oab.App.Formatting;
 using Oab.App.Localization;
 using Oab.App.Modules;
+using Oab.App.Views;
 using Oab.Data;
 
 namespace Oab.App;
@@ -28,6 +29,10 @@ public static class OabAppBuilderExtensions
         services.AddOabData(Path.Combine(FileSystem.AppDataDirectory, config.DatabaseFileName));
         services.AddSingleton<IReadOnlyList<IOabModule>>(modules);
         services.AddSingleton<OabShell>();
+
+        // Shared detail pages every shop gets, module list notwithstanding.
+        services.AddTransient<PartyStatementViewModel>();
+        services.AddTransient<PartyStatementPage>();
 
         foreach (var module in modules)
         {

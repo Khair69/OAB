@@ -141,6 +141,36 @@
   <data name="Customers_PaymentPrompt" xml:space="preserve">
     <value>كم دفع؟</value>
   </data>
+  <data name="Statement_Title" xml:space="preserve">
+    <value>كشف الحساب</value>
+  </data>
+  <data name="Statement_Empty" xml:space="preserve">
+    <value>لا يوجد أي تسجيل مع هذا الشخص بعد.</value>
+  </data>
+  <data name="Statement_YouOwe" xml:space="preserve">
+    <value>عليك</value>
+  </data>
+  <data name="Statement_TheyOwe" xml:space="preserve">
+    <value>لك</value>
+  </data>
+  <data name="Statement_Settled" xml:space="preserve">
+    <value>خالص</value>
+  </data>
+  <data name="Statement_KindPurchase" xml:space="preserve">
+    <value>شراء</value>
+  </data>
+  <data name="Statement_KindSale" xml:space="preserve">
+    <value>بيع</value>
+  </data>
+  <data name="Statement_KindPaymentOut" xml:space="preserve">
+    <value>دفعتَ</value>
+  </data>
+  <data name="Statement_KindPaymentIn" xml:space="preserve">
+    <value>دفع لك</value>
+  </data>
+  <data name="Statement_KindAdjustment" xml:space="preserve">
+    <value>تصحيح</value>
+  </data>
   <data name="Backup_Title" xml:space="preserve">
     <value>النسخ الاحتياطي</value>
   </data>

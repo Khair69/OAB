@@ -141,6 +141,36 @@
   <data name="Customers_PaymentPrompt" xml:space="preserve">
     <value>How much did they pay?</value>
   </data>
+  <data name="Statement_Title" xml:space="preserve">
+    <value>Statement</value>
+  </data>
+  <data name="Statement_Empty" xml:space="preserve">
+    <value>Nothing recorded with this person yet.</value>
+  </data>
+  <data name="Statement_YouOwe" xml:space="preserve">
+    <value>You owe them</value>
+  </data>
+  <data name="Statement_TheyOwe" xml:space="preserve">
+    <value>They owe you</value>
+  </data>
+  <data name="Statement_Settled" xml:space="preserve">
+    <value>Settled</value>
+  </data>
+  <data name="Statement_KindPurchase" xml:space="preserve">
+    <value>Purchase</value>
+  </data>
+  <data name="Statement_KindSale" xml:space="preserve">
+    <value>Sale</value>
+  </data>
+  <data name="Statement_KindPaymentOut" xml:space="preserve">
+    <value>You paid</value>
+  </data>
+  <data name="Statement_KindPaymentIn" xml:space="preserve">
+    <value>They paid</value>
+  </data>
+  <data name="Statement_KindAdjustment" xml:space="preserve">
+    <value>Correction</value>
+  </data>
   <data name="Backup_Title" xml:space="preserve">
     <value>Backup</value>
   </data>

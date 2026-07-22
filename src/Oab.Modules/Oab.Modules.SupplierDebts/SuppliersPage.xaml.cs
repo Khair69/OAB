@@ -1,5 +1,7 @@
 using System.Globalization;
 using Oab.App.Localization;
+using Oab.App.Views;
+using Oab.Core.Domain;
 
 namespace Oab.Modules.SupplierDebts;
 
@@ -27,6 +29,13 @@ public partial class SuppliersPage : ContentPage
             loc["Common_Save"], loc["Common_Cancel"]);
         if (!string.IsNullOrWhiteSpace(name))
             await _viewModel.AddSupplierAsync(name);
+    }
+
+    /// <summary>Tapping the card anywhere but a button opens that supplier's statement.</summary>
+    private async void OnSupplierTapped(object? sender, TappedEventArgs e)
+    {
+        if ((sender as BindableObject)?.BindingContext is SupplierRow row)
+            await PartyStatementPage.PushAsync(Navigation, row.Party.Id, PartyRole.Supplier);
     }
 
     private async void OnRecordPaymentClicked(object? sender, EventArgs e)

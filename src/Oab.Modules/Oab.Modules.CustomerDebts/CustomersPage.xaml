@@ -17,6 +17,9 @@
                 <DataTemplate x:DataType="local:CustomerRow">
                     <Border StrokeThickness="0" BackgroundColor="{AppThemeBinding Light=#F2F2F7, Dark=#2C2C2E}"
                             StrokeShape="RoundRectangle 12" Margin="0,4">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnCustomerTapped" />
+                        </Border.GestureRecognizers>
                         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Padding="14" RowSpacing="6">
                             <Label Text="{Binding Party.Name}" FontAttributes="Bold" FontSize="16" />
                             <Label Grid.Row="1" Text="{Binding BalanceText}" TextColor="{Binding BalanceColor}" FontSize="14" />

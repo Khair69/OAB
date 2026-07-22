@@ -17,8 +17,8 @@ Two gaps found in the code that shaped this plan:
 
 - `LedgerService.RecordAdjustmentAsync` exists but **no module calls it** — a
   typo'd amount is permanent today.
-- `LedgerStore.GetEntriesForPartyAsync` exists but **no screen calls it** — there
-  are only four pages and none show history.
+- ~~`LedgerStore.GetEntriesForPartyAsync` exists but **no screen calls it**~~ —
+  closed: the party statement page reads it.
 
 The engine is ahead of the app. This month closes that gap.
 
@@ -28,16 +28,21 @@ The engine is ahead of the app. This month closes that gap.
 
 Nothing else matters if these are missing.
 
-- **Backup & restore module** — export the SQLite file plus a plain-text summary
-  through the Android share sheet (WhatsApp to self / Drive). Prompt weekly.
-  Restore from a received file. *Test it by restoring onto a different phone.*
-- **Party statement screen** — tap a supplier/customer → chronological entries
-  with a running balance. `GetEntriesForPartyAsync` already exists; it needs a
-  page. This is the "notebook page" for that person.
-- **Correction flow** — long-press an entry → "correct this" → post an
-  `Adjustment` with its mandatory note. Show corrections visibly linked so
-  history stays honest.
-- **Global exception handler** — the `async void` event handlers can crash
+- [x] **Backup & restore module** — export the SQLite file plus a plain-text
+  summary through the Android share sheet (WhatsApp to self / Drive). Prompt
+  weekly. Restore from a received file. *Still to do: restore onto a different
+  phone and confirm it.*
+- [x] **Party statement screen** — tap a supplier/customer → entries with a
+  running balance. Lives in `Oab.App/Views` rather than a module, because a
+  party is often supplier and customer at once and both lists push the same
+  page. Newest entry first, so the reason for today's balance is at the top.
+  The pushing list passes its `PartyRole`, which is all that decides whether a
+  balance shows red — red keeps meaning "the debt this screen is about is still
+  open", the same as on the row that was tapped.
+- [ ] **Correction flow** — long-press an entry → "correct this" → post an
+  `Adjustment` with its mandatory note. The statement page is where this
+  belongs; it already labels adjustments "Correction" and shows their note.
+- [ ] **Global exception handler** — the `async void` event handlers can crash
   silently. Log to a shareable file.
 
 ## Week 2 — Real phone, real Arabic, real release
@@ -91,7 +96,7 @@ redirect the whole month.
 ## Definition of "hole proof"
 
 - [ ] Data survives a lost phone — *proven by restoring onto a different device*
-- [ ] Every balance taps through to the entries that produced it
+- [x] Every balance taps through to the entries that produced it
 - [ ] Every mistake is fixable without rewriting history
 - [ ] Works with zero internet, indefinitely
 - [ ] Survives an app upgrade with real data

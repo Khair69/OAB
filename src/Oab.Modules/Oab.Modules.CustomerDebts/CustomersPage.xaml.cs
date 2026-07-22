@@ -1,5 +1,7 @@
 using System.Globalization;
 using Oab.App.Localization;
+using Oab.App.Views;
+using Oab.Core.Domain;
 
 namespace Oab.Modules.CustomerDebts;
 
@@ -27,6 +29,13 @@ public partial class CustomersPage : ContentPage
             loc["Common_Save"], loc["Common_Cancel"]);
         if (!string.IsNullOrWhiteSpace(name))
             await _viewModel.AddCustomerAsync(name);
+    }
+
+    /// <summary>Tapping the card anywhere but a button opens that customer's statement.</summary>
+    private async void OnCustomerTapped(object? sender, TappedEventArgs e)
+    {
+        if ((sender as BindableObject)?.BindingContext is CustomerRow row)
+            await PartyStatementPage.PushAsync(Navigation, row.Party.Id, PartyRole.Customer);
     }
 
     private async void OnRecordDebtClicked(object? sender, EventArgs e)
