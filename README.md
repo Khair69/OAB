@@ -44,7 +44,8 @@ tests/                xUnit suites for the money engine and the SQLite store.
 1. **The ledger is append-only.** Every money movement is an immutable signed
    `LedgerEntry` (positive = the party owes the shop, negative = the shop owes
    the party). Balances are always `SUM(entries)`; corrections are new
-   `Adjustment` entries with a mandatory note. Never add a mutable balance
+   `Adjustment` entries with a mandatory note — tap an entry on a party's
+   statement and say what it should have been. Never add a mutable balance
    column. This is also what will make multi-device sync cheap later.
 
 2. **Custom work never touches core.** A shop wanting a special feature gets a

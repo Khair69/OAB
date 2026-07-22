@@ -13,10 +13,10 @@ trustworthy is four things, and only one of them is features:
 4. **A real shopkeeper has used it.** The core premise — "they skip POS because
    it's too much work, not price" — is still an untested assumption.
 
-Two gaps found in the code that shaped this plan:
+Two gaps found in the code that shaped this plan — **both now closed:**
 
-- `LedgerService.RecordAdjustmentAsync` exists but **no module calls it** — a
-  typo'd amount is permanent today.
+- ~~`LedgerService.RecordAdjustmentAsync` exists but **no module calls it**~~ —
+  closed: tapping an entry on the party statement corrects it.
 - ~~`LedgerStore.GetEntriesForPartyAsync` exists but **no screen calls it**~~ —
   closed: the party statement page reads it.
 
@@ -39,11 +39,19 @@ Nothing else matters if these are missing.
   The pushing list passes its `PartyRole`, which is all that decides whether a
   balance shows red — red keeps meaning "the debt this screen is about is still
   open", the same as on the row that was tapped.
-- [ ] **Correction flow** — long-press an entry → "correct this" → post an
-  `Adjustment` with its mandatory note. The statement page is where this
-  belongs; it already labels adjustments "Correction" and shows their note.
+- [x] **Correction flow** — tap an entry → "Correct this entry" → what it should
+  have been → why. Posts an `Adjustment` carrying the entry's `DocumentId`, so an
+  invoice's outstanding follows the fix. The shopkeeper types a plain amount and
+  never a sign: `LedgerMath.CorrectionDelta` takes the direction from the entry
+  being corrected. Zero is a valid answer and means "this never happened". The
+  reason is mandatory but pre-filled with `"Was 1,000.00 SP"`, so accepting it
+  costs one tap. Tap rather than long-press because MAUI has no long-press
+  gesture — and because the action sheet is the only thing that makes the feature
+  discoverable. *Still to do: watch a real person get through three stacked
+  dialogs on a phone.*
 - [ ] **Global exception handler** — the `async void` event handlers can crash
-  silently. Log to a shareable file.
+  silently. Log to a shareable file. `BackupPage` and `PartyStatementPage` each
+  now carry a private `RunAsync`; that duplication is the signal to hoist it.
 
 ## Week 2 — Real phone, real Arabic, real release
 
@@ -54,7 +62,7 @@ cheap Android phone in Arabic.
   `DatePicker` under `ar`, the numeric keyboard, and the decimal separator.
 - **Arabic-Indic digit input.** `TryParseAmount` only tries CurrentCulture then
   Invariant — if a user types ٥٠ it likely fails. We render those digits but
-  can't read them back.
+  can't read them back. Four call sites now, including the correction amount.
 - **Branding** — real icon, Arabic app name, per-shop `ApplicationId` (still
   `com.companyname.*`), version scheme.
 - **Signed release APK** and documented keystore handling. Debug APKs aren't
@@ -97,7 +105,7 @@ redirect the whole month.
 
 - [ ] Data survives a lost phone — *proven by restoring onto a different device*
 - [x] Every balance taps through to the entries that produced it
-- [ ] Every mistake is fixable without rewriting history
+- [x] Every mistake is fixable without rewriting history
 - [ ] Works with zero internet, indefinitely
 - [ ] Survives an app upgrade with real data
 - [ ] Fully usable in Arabic on a cheap Android phone

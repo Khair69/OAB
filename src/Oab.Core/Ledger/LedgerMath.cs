@@ -42,4 +42,34 @@ public static class LedgerMath
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
     }
+
+    /// <summary>
+    /// The signed adjustment that makes an already-recorded entry count as
+    /// <paramref name="correctedMagnitude"/> instead of what it says now — the
+    /// arithmetic behind the correction flow.
+    ///
+    /// The shopkeeper only ever types a magnitude ("it should have been 100"),
+    /// never a sign; the direction is taken from the entry being corrected,
+    /// because a typo changes how much moved, never which way it moved. Feed the
+    /// result straight to <c>LedgerService.RecordAdjustmentAsync</c>, which is
+    /// the only method that accepts a pre-signed amount.
+    ///
+    /// <paramref name="correctedMagnitude"/> of zero is legal and means "this
+    /// never happened": the returned delta cancels the entry out exactly, while
+    /// leaving it on the record. Append-only has no delete.
+    /// </summary>
+    /// <returns>Zero when the entry already reads as the corrected amount — the
+    /// caller should post nothing, since an adjustment of zero is rejected.</returns>
+    public static decimal CorrectionDelta(decimal recordedAmount, decimal correctedMagnitude)
+    {
+        if (correctedMagnitude < 0m)
+            throw new ArgumentOutOfRangeException(nameof(correctedMagnitude),
+                "A corrected amount is a magnitude; direction comes from the entry being corrected.");
+        if (recordedAmount == 0m)
+            throw new ArgumentOutOfRangeException(nameof(recordedAmount),
+                "An entry of zero has no direction to correct towards.");
+
+        var corrected = recordedAmount < 0m ? -correctedMagnitude : correctedMagnitude;
+        return corrected - recordedAmount;
+    }
 }

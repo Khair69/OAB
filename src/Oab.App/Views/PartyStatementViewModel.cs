@@ -26,12 +26,31 @@ public sealed class StatementRow
 }
 
 /// <summary>
+/// What came of asking to correct an entry. The page turns each of these into a
+/// message; only <see cref="Applied"/> changed anything.
+/// </summary>
+public enum CorrectionOutcome
+{
+    Applied,
+    /// <summary>The corrected amount is what the entry already says. Nothing posted.</summary>
+    AlreadyThatAmount,
+    /// <summary>A negative was typed. Direction is never the shopkeeper's to enter.</summary>
+    InvalidAmount,
+    /// <summary>No reason given. An unexplained correction is worse than the mistake.</summary>
+    NoteMissing,
+}
+
+/// <summary>
 /// The notebook page for one party: every entry that touched their balance, in
 /// order, with the balance after each one. This is what makes a number
 /// explainable — "why do I owe 500?" is answered by scrolling.
+///
+/// It is also where mistakes get fixed, because it is the only place an
+/// individual entry is visible. See <see cref="CorrectAsync"/>.
 /// </summary>
 public partial class PartyStatementViewModel(
     ILedgerStore store,
+    LedgerService ledger,
     IMoneyFormatter money,
     LocalizationManager localization) : ObservableObject
 {
@@ -60,12 +79,16 @@ public partial class PartyStatementViewModel(
     /// </summary>
     private PartyRole _perspective;
 
+    /// <summary>Remembered so a correction can refresh the page it was made from.</summary>
+    private Guid _partyId;
+
     public async Task LoadAsync(Guid partyId, PartyRole perspective = PartyRole.None)
     {
         if (IsBusy)
             return;
         IsBusy = true;
         _perspective = perspective;
+        _partyId = partyId;
         try
         {
             var party = await store.GetPartyAsync(partyId);
@@ -113,6 +136,60 @@ public partial class PartyStatementViewModel(
             IsBusy = false;
         }
     }
+
+    /// <summary>
+    /// Fixes a mistake by appending an <see cref="EntryKind.Adjustment"/> that
+    /// moves the balance to where it would have been had
+    /// <paramref name="row"/> been entered as
+    /// <paramref name="correctedAmount"/>. The original entry is never touched —
+    /// the statement afterwards shows the wrong number, then the fix, which is
+    /// exactly how a paper notebook records a crossing-out.
+    ///
+    /// <paramref name="correctedAmount"/> is a magnitude, like every other
+    /// amount the shopkeeper types (D4); the sign comes from the entry being
+    /// corrected. Zero is accepted and means "this never happened".
+    ///
+    /// The adjustment inherits the entry's <c>DocumentId</c>, so correcting a
+    /// purchase also corrects what that invoice still has outstanding —
+    /// otherwise the purchases list would keep asking for the old amount.
+    ///
+    /// It is stamped with <c>DateTimeOffset.Now</c>, not the original date: the
+    /// correction happened today, and back-dating it would quietly erase the
+    /// days on which the book was wrong.
+    /// </summary>
+    public async Task<CorrectionOutcome> CorrectAsync(StatementRow row, decimal correctedAmount, string? note)
+    {
+        if (correctedAmount < 0m)
+            return CorrectionOutcome.InvalidAmount;
+        if (string.IsNullOrWhiteSpace(note))
+            return CorrectionOutcome.NoteMissing;
+
+        var delta = LedgerMath.CorrectionDelta(row.Entry.Amount, correctedAmount);
+        if (delta == 0m)
+            return CorrectionOutcome.AlreadyThatAmount;
+
+        await ledger.RecordAdjustmentAsync(
+            row.Entry.PartyId, delta, DateTimeOffset.Now, note.Trim(), row.Entry.DocumentId);
+        await LoadAsync(_partyId, _perspective);
+        return CorrectionOutcome.Applied;
+    }
+
+    /// <summary>
+    /// The question put to the shopkeeper, carrying what is recorded now so they
+    /// can see what they are changing without having to remember it.
+    /// </summary>
+    public string CorrectionPromptFor(StatementRow row) =>
+        $"{row.KindText} — {localization["Correct_Recorded"]}: {row.AmountText}\n{localization["Correct_AmountPrompt"]}";
+
+    /// <summary>
+    /// Pre-filled text for the mandatory reason. The note is what makes a
+    /// corrected book readable a year later, but demanding a sentence in Arabic
+    /// on a phone keyboard is how a feature goes unused — so the default
+    /// ("Was 1,000 SP") is already the most useful thing it could say, and
+    /// accepting it costs one tap.
+    /// </summary>
+    public string SuggestedNoteFor(StatementRow row) =>
+        $"{localization["Correct_Was"]} {row.AmountText}";
 
     /// <summary>
     /// Direction in words, magnitude in digits — the same contract as

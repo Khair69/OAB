@@ -52,9 +52,9 @@ knows nothing about MAUI.
 | `src/Oab.Modules/Oab.Modules.Backup` | android, windows | App | Snapshot / readable summary / restore |
 | `customers/Oab.Customer.Template` | android, windows | App + all four modules | The app head to copy per shop |
 | `tests/Oab.TestSupport` | `net10.0` | Core | Shared `InMemoryLedgerStore` |
-| `tests/Oab.Core.Tests` | `net10.0` | Core, TestSupport | Ledger math and service (32 tests) |
+| `tests/Oab.Core.Tests` | `net10.0` | Core, TestSupport | Ledger math and service (42 tests) |
 | `tests/Oab.Data.Tests` | `net10.0` | Data | Real SQLite + migrations + backup (13 tests) |
-| `tests/Oab.App.Tests` | `net10.0-windows10.0.19041.0` | App + all modules, TestSupport | View models (30 tests) |
+| `tests/Oab.App.Tests` | `net10.0-windows10.0.19041.0` | App + all modules, TestSupport | View models (41 tests) |
 
 Projects are listed in [`OAB.slnx`](../OAB.slnx), the XML solution format.
 

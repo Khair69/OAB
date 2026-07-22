@@ -19,7 +19,8 @@ src/Oab.Core/
 │   └── Document.cs       Optional grouping (an invoice) + DocumentLine
 ├── Ledger/
 │   ├── ILedgerStore.cs   Persistence boundary — note: no update/delete for entries
-│   ├── LedgerMath.cs     Pure functions: Balance, Outstanding, IsSettled, SignedAmount
+│   ├── LedgerMath.cs     Pure functions: Balance, Outstanding, IsSettled,
+│   │                     SignedAmount, CorrectionDelta
 │   └── LedgerService.cs  Use-case layer: every way money can move
 ├── Formatting/
 │   └── MoneyFormat.cs    decimal → string, incl. Arabic-Indic digit shaping
@@ -152,9 +153,42 @@ place.
 | `Outstanding` | `(IEnumerable<LedgerEntry>) → decimal` | `Math.Abs(sum)`. Always positive, so a purchase document and a sale document report "150 remaining" the same way. `0` = settled. |
 | `IsSettled` | `(IEnumerable<LedgerEntry>) → bool` | `sum == 0m`. |
 | `SignedAmount` | `(EntryKind, decimal positive) → decimal` | Applies the table in §1. Throws `ArgumentOutOfRangeException` if the amount is ≤ 0, `ArgumentException` for `Adjustment`. |
+| `CorrectionDelta` | `(decimal recorded, decimal correctedMagnitude) → decimal` | The signed adjustment that makes an existing entry count as `correctedMagnitude`. See below. |
 
 `SignedAmount` refusing non-positive input is what stops a `-50` typed into an
 amount box from silently inverting a debt.
+
+### `CorrectionDelta` — the arithmetic behind fixing a typo
+
+```csharp
+var corrected = recordedAmount < 0m ? -correctedMagnitude : correctedMagnitude;
+return corrected - recordedAmount;
+```
+
+Three properties make this the whole of the correction feature:
+
+1. **The shopkeeper types a magnitude, never a sign.** "It should have been 100"
+   is a number they can produce; "+900" is not. The direction is taken from the
+   entry being corrected, because a typo changes *how much* moved, never *which
+   way*. This is the same contract as every other amount box in the app (D4).
+2. **`recorded + delta` is exactly the corrected entry.** That identity is what
+   the test asserts, rather than the specific delta values.
+3. **A corrected magnitude of `0` is legal** and means "this never happened":
+   the delta cancels the entry out precisely while leaving it on the record.
+   Append-only has no delete, and the shopkeeper who logged a purchase twice
+   needs an answer.
+
+Two guards. A **negative** `correctedMagnitude` throws — direction is not the
+typist's to enter. A `recordedAmount` of **zero** throws, because an entry of
+zero has no direction to correct towards; no such entry can exist today
+(`SignedAmount` rejects non-positive input and `RecordAdjustmentAsync` rejects
+zero), so this is a guard against a future kind that forgets the rule.
+
+Returning **zero** is not an error: it means the entry already reads as the
+corrected amount. The caller must post nothing, because `RecordAdjustmentAsync`
+rejects an adjustment of zero. `PartyStatementViewModel` turns that case into a
+sentence rather than an exception — see
+[04 §9](04-app-shell.md#the-correction-flow).
 
 ## 4. `LedgerService` — the use-case layer
 
@@ -218,11 +252,15 @@ The correction mechanism. Two guards, both enforced before anything is written:
   changes nothing");
 - blank or whitespace `note` → `ArgumentException` ("adjustments must say why").
 
-The amount is **pre-signed**: positive means the party owes the shop more.
+The amount is **pre-signed**: positive means the party owes the shop more. It is
+the only method that takes an already-signed amount, and
+`LedgerMath.CorrectionDelta` is what produces one.
 
-> ⚠️ **This method has no caller in the app today.** The engine supports
-> corrections; no screen offers them. See
-> [10 — Status §4](10-status.md#4-known-gaps-and-risks).
+**Called from** `PartyStatementViewModel.CorrectAsync` — tap an entry on the
+party statement, say what it should have been, say why
+([04 §9](04-app-shell.md#the-correction-flow)). The `documentId` argument is
+passed the corrected entry's own `DocumentId`, so correcting a purchase also
+corrects what that invoice still has outstanding.
 
 ### Queries
 
@@ -267,9 +305,25 @@ the single-`Party` decision.
 | `RecordPurchaseAsync(s, 1000, paidNow: false)` | `Purchase −1000` | −1000 | 1 row |
 | `RecordAdjustmentAsync(s, +900, "typo: was 1000")` | `Adjustment +900` | **−100** | **2 rows — the original is untouched** |
 
+The `+900` is not typed by anyone: the shopkeeper says "it should have been 100"
+and `LedgerMath.CorrectionDelta(-1000, 100)` produces it.
+
 The statement screen renders the adjustment labelled "Correction", outlined in
 gold, with its note visible. The mistake stays in the history, exactly as a
 crossed-out line stays in a paper notebook.
+
+### A purchase that never happened
+
+| Step | Entries | Balance | Document outstanding |
+|---|---|---|---|
+| `RecordPurchaseAsync(s, 250, paidNow: false)` | `Purchase −250` | −250 | 250 |
+| correct to **0** → `RecordAdjustmentAsync(s, +250, note, doc)` | `Adjustment +250` | **0** | **0** |
+
+Passing the document id is what makes the second column and the third agree. Omit
+it and the party balance is right while the purchases list still offers to pay
+off 250 — the kind of disagreement that costs the shopkeeper's trust in one
+sitting. Pinned by
+`PartyStatementViewModelTests.CorrectionInheritsTheDocumentSoTheInvoiceStopsAskingForTheOldAmount`.
 
 ## 6. `MoneyFormat` — [`MoneyFormat.cs`](../src/Oab.Core/Formatting/MoneyFormat.cs)
 
@@ -390,16 +444,18 @@ purchase must write both of its entries in one transaction.
 | Non-adjustment amounts are positive at the boundary | `LedgerMath.SignedAmount` throws |
 | Adjustments carry a reason | `LedgerService.RecordAdjustmentAsync` throws on blank note |
 | Adjustments never pass through `SignedAmount` | `SignedAmount` throws for that kind |
+| A correction's direction comes from the entry, not the typist | `CorrectionDelta` throws on a negative magnitude |
+| A correction to a document also corrects that document | The adjustment inherits the entry's `DocumentId` |
 | A cash purchase and a settled credit purchase are indistinguishable in the data | Both are `Purchase` + `PaymentOut` totalling zero |
 | Money never becomes a `double` | `decimal` throughout, stored as TEXT in SQLite (see [03 §3](03-data-layer.md#3-why-decimals-are-stored-as-text)) |
 
 ## 10. Test coverage
 
-[`tests/Oab.Core.Tests`](../tests/Oab.Core.Tests) — **32 tests, all passing.**
+[`tests/Oab.Core.Tests`](../tests/Oab.Core.Tests) — **42 tests, all passing.**
 
 | File | Covers |
 |---|---|
-| `LedgerMathTests` | Sign convention per kind, adjustment rejection, non-positive rejection, `Outstanding` positivity for both document directions, empty-ledger behaviour |
+| `LedgerMathTests` | Sign convention per kind, adjustment rejection, non-positive rejection, `Outstanding` positivity for both document directions, empty-ledger behaviour, `CorrectionDelta` in both directions plus correct-to-zero, already-correct, and its two guards |
 | `LedgerServiceTests` | Credit and cash purchases, partial and installment payments, sales, customer repayment, the same party as both roles, adjustments preserving history, adjustment validation, non-positive rejection, document lines, per-party balance map |
 | `MoneyFormatTests` | Grouping, two decimals, symbol placement, sign dropping, Arabic-Indic shaping |
 | `LedgerSummaryReportTests` | Section grouping, totals, omitted empty sections, empty book, platform-stable line endings, Arabic-Indic digits |

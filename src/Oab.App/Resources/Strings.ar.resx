@@ -171,6 +171,33 @@
   <data name="Statement_KindAdjustment" xml:space="preserve">
     <value>تصحيح</value>
   </data>
+  <data name="Correct_Title" xml:space="preserve">
+    <value>تصحيح القيد</value>
+  </data>
+  <data name="Correct_Action" xml:space="preserve">
+    <value>صحّح هذا القيد</value>
+  </data>
+  <data name="Correct_Recorded" xml:space="preserve">
+    <value>المسجَّل</value>
+  </data>
+  <data name="Correct_AmountPrompt" xml:space="preserve">
+    <value>كم كان يجب أن يكون المبلغ؟</value>
+  </data>
+  <data name="Correct_NotePrompt" xml:space="preserve">
+    <value>ما السبب؟ يُحفظ مع التصحيح.</value>
+  </data>
+  <data name="Correct_Was" xml:space="preserve">
+    <value>كان</value>
+  </data>
+  <data name="Correct_InvalidAmount" xml:space="preserve">
+    <value>أدخل المبلغ الصحيح. أدخل صفرًا إذا كان هذا القيد لا يجب أن يكون موجودًا أصلًا.</value>
+  </data>
+  <data name="Correct_NoteRequired" xml:space="preserve">
+    <value>لا بدّ من ذكر سبب التصحيح.</value>
+  </data>
+  <data name="Correct_Unchanged" xml:space="preserve">
+    <value>هذا هو المبلغ المسجَّل أصلًا. لم يتغيّر شيء.</value>
+  </data>
   <data name="Backup_Title" xml:space="preserve">
     <value>النسخ الاحتياطي</value>
   </data>

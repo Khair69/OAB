@@ -171,6 +171,33 @@
   <data name="Statement_KindAdjustment" xml:space="preserve">
     <value>Correction</value>
   </data>
+  <data name="Correct_Title" xml:space="preserve">
+    <value>Correct entry</value>
+  </data>
+  <data name="Correct_Action" xml:space="preserve">
+    <value>Correct this entry</value>
+  </data>
+  <data name="Correct_Recorded" xml:space="preserve">
+    <value>recorded as</value>
+  </data>
+  <data name="Correct_AmountPrompt" xml:space="preserve">
+    <value>What should the amount have been?</value>
+  </data>
+  <data name="Correct_NotePrompt" xml:space="preserve">
+    <value>Why? This is saved with the correction.</value>
+  </data>
+  <data name="Correct_Was" xml:space="preserve">
+    <value>Was</value>
+  </data>
+  <data name="Correct_InvalidAmount" xml:space="preserve">
+    <value>Enter the amount it should have been. Enter 0 if this entry should not be there at all.</value>
+  </data>
+  <data name="Correct_NoteRequired" xml:space="preserve">
+    <value>A correction has to say why.</value>
+  </data>
+  <data name="Correct_Unchanged" xml:space="preserve">
+    <value>That is already the amount recorded. Nothing was changed.</value>
+  </data>
   <data name="Backup_Title" xml:space="preserve">
     <value>Backup</value>
   </data>

@@ -7,7 +7,7 @@ namespace Oab.App.Tests;
 public class PartyStatementViewModelTests
 {
     private static PartyStatementViewModel NewVm(VmContext c) =>
-        new(c.Store, c.Money, c.Localization);
+        new(c.Store, c.Ledger, c.Money, c.Localization);
 
     private static async Task<Party> AddPartyAsync(VmContext c, string name = "Acme")
     {
@@ -217,6 +217,152 @@ public class PartyStatementViewModelTests
 
         Assert.Equal("Settled", vm.BalanceText);
         Assert.Equal(Colors.Gray, vm.BalanceColor);
+    }
+
+    [Fact]
+    public async Task CorrectingAnEntryFixesTheBalanceWithoutTouchingHistory()
+    {
+        var c = new VmContext();
+        var party = await AddPartyAsync(c);
+        var day1 = new DateTimeOffset(2026, 6, 1, 9, 0, 0, TimeSpan.Zero);
+        // The fat-finger this whole feature exists for.
+        await c.Ledger.RecordPurchaseAsync(party.Id, 1000m, paidNow: false, day1);
+
+        var vm = NewVm(c);
+        await vm.LoadAsync(party.Id, PartyRole.Supplier);
+        var outcome = await vm.CorrectAsync(vm.Rows[0], 100m, "typo");
+
+        Assert.Equal(CorrectionOutcome.Applied, outcome);
+        Assert.Equal("You owe them: 100.00 SP", vm.BalanceText);
+        // Two rows now: the correction on top, the original still saying 1000.
+        Assert.Equal(2, vm.Rows.Count);
+        Assert.True(vm.Rows[0].IsCorrection);
+        Assert.Equal("typo", vm.Rows[0].NoteText);
+        Assert.Equal(-1000m, vm.Rows[1].Entry.Amount);
+        Assert.False(vm.Rows[1].IsCorrection);
+    }
+
+    [Fact]
+    public async Task CorrectingToZeroCancelsTheEntryButLeavesItOnTheRecord()
+    {
+        var c = new VmContext();
+        var party = await AddPartyAsync(c);
+        await c.Ledger.RecordSaleAsync(party.Id, 250m, paidNow: false, DateTimeOffset.Now);
+
+        var vm = NewVm(c);
+        await vm.LoadAsync(party.Id, PartyRole.Customer);
+        var outcome = await vm.CorrectAsync(vm.Rows[0], 0m, "never happened");
+
+        Assert.Equal(CorrectionOutcome.Applied, outcome);
+        Assert.Equal("Settled", vm.BalanceText);
+        Assert.Equal(2, vm.Rows.Count);
+    }
+
+    [Fact]
+    public async Task CorrectionInheritsTheDocumentSoTheInvoiceStopsAskingForTheOldAmount()
+    {
+        var c = new VmContext();
+        var party = await AddPartyAsync(c);
+        var document = await c.Ledger.RecordPurchaseAsync(
+            party.Id, 1000m, paidNow: false, DateTimeOffset.Now);
+
+        var vm = NewVm(c);
+        await vm.LoadAsync(party.Id, PartyRole.Supplier);
+        await vm.CorrectAsync(vm.Rows[0], 100m, "typo");
+
+        // Without the inherited DocumentId the purchases list would still be
+        // offering to pay off 1000.
+        Assert.Equal(100m, await c.Ledger.GetDocumentOutstandingAsync(document.Id));
+        Assert.Equal(document.Id, vm.Rows[0].Entry.DocumentId);
+    }
+
+    [Fact]
+    public async Task CorrectingAPaymentAdjustsInThePaymentsOwnDirection()
+    {
+        var c = new VmContext();
+        var party = await AddPartyAsync(c);
+        var day1 = new DateTimeOffset(2026, 6, 1, 9, 0, 0, TimeSpan.Zero);
+        await c.Ledger.RecordPurchaseAsync(party.Id, 500m, paidNow: false, day1);
+        await c.Ledger.RecordPaymentOutAsync(party.Id, 300m, day1.AddDays(1));
+
+        var vm = NewVm(c);
+        await vm.LoadAsync(party.Id, PartyRole.Supplier);
+        // Paid 200, not 300 — the debt should go back up, not down.
+        var outcome = await vm.CorrectAsync(vm.Rows[0], 200m, "paid 200");
+
+        Assert.Equal(CorrectionOutcome.Applied, outcome);
+        Assert.Equal("You owe them: 300.00 SP", vm.BalanceText);
+    }
+
+    [Fact]
+    public async Task ACorrectionCanItselfBeCorrected()
+    {
+        var c = new VmContext();
+        var party = await AddPartyAsync(c);
+        await c.Ledger.RecordPurchaseAsync(party.Id, 1000m, paidNow: false, DateTimeOffset.Now);
+
+        var vm = NewVm(c);
+        await vm.LoadAsync(party.Id, PartyRole.Supplier);
+        await vm.CorrectAsync(vm.Rows[0], 100m, "typo");        // delta +900
+        await vm.CorrectAsync(vm.Rows[0], 800m, "wrong again");  // that 900 should have been 800
+
+        Assert.Equal("You owe them: 200.00 SP", vm.BalanceText);
+        Assert.Equal(3, vm.Rows.Count);
+    }
+
+    [Theory]
+    [InlineData(-1.0, "typo", CorrectionOutcome.InvalidAmount)]
+    [InlineData(100.0, "", CorrectionOutcome.NoteMissing)]
+    [InlineData(100.0, "   ", CorrectionOutcome.NoteMissing)]
+    [InlineData(null, null, CorrectionOutcome.NoteMissing)]
+    public async Task ARefusedCorrectionPostsNothing(
+        double? correctedAmount, string? note, CorrectionOutcome expected)
+    {
+        var c = new VmContext();
+        var party = await AddPartyAsync(c);
+        await c.Ledger.RecordPurchaseAsync(party.Id, 1000m, paidNow: false, DateTimeOffset.Now);
+
+        var vm = NewVm(c);
+        await vm.LoadAsync(party.Id, PartyRole.Supplier);
+        var outcome = await vm.CorrectAsync(vm.Rows[0], (decimal)(correctedAmount ?? 100.0), note);
+
+        Assert.Equal(expected, outcome);
+        Assert.Single(vm.Rows);
+        Assert.Equal("You owe them: 1,000.00 SP", vm.BalanceText);
+    }
+
+    [Fact]
+    public async Task CorrectingToTheAmountAlreadyRecordedPostsNothing()
+    {
+        var c = new VmContext();
+        var party = await AddPartyAsync(c);
+        await c.Ledger.RecordPurchaseAsync(party.Id, 1000m, paidNow: false, DateTimeOffset.Now);
+
+        var vm = NewVm(c);
+        await vm.LoadAsync(party.Id, PartyRole.Supplier);
+        // An adjustment of zero is rejected by the engine; catching it here is
+        // what turns a crash into a sentence.
+        var outcome = await vm.CorrectAsync(vm.Rows[0], 1000m, "no change");
+
+        Assert.Equal(CorrectionOutcome.AlreadyThatAmount, outcome);
+        Assert.Single(vm.Rows);
+    }
+
+    [Fact]
+    public async Task ThePromptsShowWhatIsRecordedAndSuggestItAsTheReason()
+    {
+        var c = new VmContext();
+        var party = await AddPartyAsync(c);
+        await c.Ledger.RecordPurchaseAsync(party.Id, 1000m, paidNow: false, DateTimeOffset.Now);
+
+        var vm = NewVm(c);
+        await vm.LoadAsync(party.Id);
+        var row = vm.Rows[0];
+
+        Assert.Equal(
+            "Purchase — recorded as: 1,000.00 SP\nWhat should the amount have been?",
+            vm.CorrectionPromptFor(row));
+        Assert.Equal("Was 1,000.00 SP", vm.SuggestedNoteFor(row));
     }
 
     [Fact]

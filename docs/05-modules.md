@@ -30,7 +30,13 @@ graph LR
     PL -- "＋" --> NP[New purchase]
     SL -- "tap card" --> ST[Party statement<br/>perspective: Supplier]
     CL -- "tap card" --> ST2[Party statement<br/>perspective: Customer]
+    ST -- "tap entry" --> CO{{Correct entry<br/>action sheet + 2 prompts}}
+    ST2 -- "tap entry" --> CO
 ```
+
+The correction flow is not a screen — it is dialogs over the statement page
+([04 §9](04-app-shell.md#the-correction-flow)) — but it is the only place in the
+product where an existing number can be changed, so it belongs on this map.
 
 ---
 

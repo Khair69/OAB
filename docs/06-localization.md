@@ -75,11 +75,19 @@ in the summary report is plain.
 
 **Input is a known gap.** `NewPurchaseViewModel.TryParseAmount` tries
 `CurrentCulture` then `InvariantCulture`; neither parses Arabic-Indic digits. A
-shop with this option on renders `٥٠` but cannot read `٥٠` back.
+shop with this option on renders `٥٠` but cannot read `٥٠` back. The same
+two-culture attempt is copied in `SuppliersPage`, `CustomersPage`, and
+`PartyStatementPage` — **four call sites for one missing function**, which is a
+map-to-ASCII helper next to `MapDigits` in Core.
+
+Because of this, `Correct_InvalidAmount` says **"أدخل صفرًا"** — the word — rather
+than the digit `٠` it would naturally use. Instructing someone to type a
+character the app cannot parse is worse than being slightly less idiomatic.
+Revisit the wording once input is fixed.
 
 ## 4. Resource key catalogue
 
-**70 keys, both languages complete.** Files:
+**79 keys, both languages complete.** Files:
 [`Strings.resx`](../src/Oab.App/Resources/Strings.resx) (English, the neutral
 fallback) and [`Strings.ar.resx`](../src/Oab.App/Resources/Strings.ar.resx).
 
@@ -166,6 +174,34 @@ fallback) and [`Strings.ar.resx`](../src/Oab.App/Resources/Strings.ar.resx).
 | `Statement_KindPaymentIn` | They paid | دفع لك | Row kind label |
 | `Statement_KindAdjustment` | Correction | تصحيح | Row kind label |
 
+### Correct (9)
+
+The correction flow on the statement page
+([04 §9](04-app-shell.md#the-correction-flow)). Its own area rather than more
+`Statement_` keys, because a shop that rewords "Statement" has no reason to
+reword the correction dialogs with it.
+
+| Key | English | Arabic | Used by |
+|---|---|---|---|
+| `Correct_Title` | Correct entry | تصحيح القيد | Action sheet, both prompts, result alerts |
+| `Correct_Action` | Correct this entry | صحّح هذا القيد | The one action-sheet option |
+| `Correct_Recorded` | recorded as | المسجَّل | Amount prompt body — what the entry says now |
+| `Correct_AmountPrompt` | What should the amount have been? | كم كان يجب أن يكون المبلغ؟ | Amount prompt body |
+| `Correct_NotePrompt` | Why? This is saved with the correction. | ما السبب؟ يُحفظ مع التصحيح. | Reason prompt body |
+| `Correct_Was` | Was | كان | Pre-filled reason — `"Was 1,000.00 SP"` |
+| `Correct_InvalidAmount` | Enter the amount it should have been. Enter 0 if this entry should not be there at all. | أدخل المبلغ الصحيح. أدخل صفرًا إذا كان هذا القيد لا يجب أن يكون موجودًا أصلًا. | Unparseable or negative |
+| `Correct_NoteRequired` | A correction has to say why. | لا بدّ من ذكر سبب التصحيح. | Reason cleared |
+| `Correct_Unchanged` | That is already the amount recorded. Nothing was changed. | هذا هو المبلغ المسجَّل أصلًا. لم يتغيّر شيء. | Delta would be zero |
+
+`Correct_InvalidAmount` deliberately does **not** reuse `Common_InvalidAmount`
+("greater than zero"): here zero is a valid answer, and it means "this entry
+should not exist". The message says so, because a shopkeeper who logged the same
+purchase twice will look for exactly that.
+
+`Correct_Was` is a prefix rather than a `{0}` format string. Placeholders are the
+thing translators get wrong, and the concatenation reads correctly in both
+directions because the amount is rendered by `IMoneyFormatter`.
+
 ### Backup (17)
 
 | Key | English | Arabic | Used by |
@@ -196,7 +232,7 @@ are not dead-by-accident.
 ### Naming convention
 
 `<Area>_<Thing>`. Areas are `Common`, `Party`, and one per module or screen
-(`Purchases`, `Suppliers`, `Customers`, `Statement`, `Backup`). Prompt bodies end
+(`Purchases`, `Suppliers`, `Customers`, `Statement`, `Correct`, `Backup`). Prompt bodies end
 in `Prompt`, empty-state text in `Empty`, explanatory subtext in `Hint`.
 
 ## 5. Wording notes for the Arabic strings
@@ -216,7 +252,7 @@ deliberately drops the sign.
 
 ## 6. Adding a language
 
-1. Add `src/Oab.App/Resources/Strings.<culture>.resx` with all 70 keys. It is
+1. Add `src/Oab.App/Resources/Strings.<culture>.resx` with all 79 keys. It is
    picked up automatically — `Oab.App.csproj` has no per-file resource item, and
    `ResourceManager` resolves satellite assemblies by culture.
 2. Add the culture code to that shop's `ShopConfig.SupportedCultures`.

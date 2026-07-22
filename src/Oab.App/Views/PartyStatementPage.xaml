@@ -24,6 +24,14 @@
                             StrokeShape="RoundRectangle 12" Margin="0,4">
                         <!-- Corrections are outlined, not hidden: a fixed accent reads on
                              both themes, and an edited-looking history is the point. -->
+                        <!-- Tapping a row is the only way into the correction flow.
+                             MAUI has no long-press gesture, and context flyouts are
+                             Windows/macOS-only, so the tap opens a labelled action
+                             sheet — which doubles as the thing that makes the feature
+                             discoverable at all. -->
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnEntryTapped" />
+                        </Border.GestureRecognizers>
                         <Border.Triggers>
                             <DataTrigger TargetType="Border" Binding="{Binding IsCorrection}" Value="True">
                                 <Setter Property="Stroke" Value="Goldenrod" />

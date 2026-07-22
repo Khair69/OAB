@@ -312,6 +312,72 @@ once, so all `{oab:Tr …}` text re-resolves without a restart.
 
 ---
 
+## D19 — A correction is entered as "what it should have been"
+
+**Context.** `RecordAdjustmentAsync` takes a **pre-signed** amount: `+900` to fix
+a purchase of 1000 that should have been 100. That is the correct data model and
+an impossible thing to ask a shopkeeper for. They know the entry is wrong and
+they know the right number; they do not know the delta, and they certainly do not
+know its sign.
+
+**Decision.** The UI asks for the corrected **magnitude**. `LedgerMath.CorrectionDelta`
+takes the direction from the entry being corrected and computes the delta:
+
+```csharp
+var corrected = recordedAmount < 0m ? -correctedMagnitude : correctedMagnitude;
+return corrected - recordedAmount;
+```
+
+A typo changes *how much* moved, never *which way* — so direction is never the
+typist's to enter, and a negative input throws rather than being interpreted.
+
+**Consequences.**
+
+- **Zero is a legal answer** and means "this never happened": the delta cancels
+  the entry exactly while leaving it on the record. Append-only has no delete,
+  and logging the same purchase twice is a real mistake that needs a real answer.
+- **A delta of zero is not an error but must not be posted** —
+  `RecordAdjustmentAsync` throws on it. `CorrectAsync` returns
+  `AlreadyThatAmount`, which is what turns a crash into a sentence.
+- **The adjustment inherits the corrected entry's `DocumentId`**, so an invoice's
+  outstanding follows the correction. Omitting it would leave the party balance
+  right and the purchases list wrong — a disagreement between two screens costs
+  more trust than the original typo did.
+- **It is stamped `Now`, not the original date.** The book *was* wrong for those
+  days, and the statement exists to explain exactly that.
+
+**Cost.** One more concept in `LedgerMath`, and a magnitude→delta translation
+that has to be right. It is seven lines in Core with ten test cases, which is
+where a rule like this belongs.
+
+---
+
+## D20 — Corrections open from a tap and an action sheet, not a long-press
+
+**Context.** The natural gesture for "do something to this row" is a long-press.
+MAUI has no long-press gesture, and `FlyoutBase.ContextFlyout` is Windows and
+macOS only — Android, the actual product, gets nothing.
+
+**Decision.** A `TapGestureRecognizer` on the statement row opens a
+`DisplayActionSheetAsync` with one named option.
+
+**Why not the alternatives.** `CommunityToolkit.Maui` has `TouchBehavior`
+with a long-press command, but that is a whole package for one gesture on one
+screen. A platform handler is a per-platform surface to maintain in a repo whose
+whole thesis is being small. `SwipeView` works on Android but its direction flips
+under RTL, and this app is RTL by default.
+
+**Why it is better anyway.** Nothing on the statement announces that a row is
+tappable, so a hidden long-press would be a feature nobody ever finds. The action
+sheet is where the feature is *discovered* — it names the action in the
+shopkeeper's language — and it is also what keeps a stray tap harmless.
+
+**Cost.** One extra dialog, on a rare and consequential action, where an extra
+confirmation is not a tax. Revisit if the row ever needs a second action; a real
+long-press earns its dependency then.
+
+---
+
 ## Rejected alternatives, briefly
 
 | Considered | Rejected because |
@@ -322,6 +388,8 @@ once, so all `{oab:Tr …}` text re-resolves without a restart.
 | **Separate `Supplier` / `Customer` tables** | Two balances for one human (D2). |
 | **`PurchaseOnCredit` / `PurchaseCash` as distinct kinds** (as sketched in `plan.md`) | Superseded by D5 — a cash purchase is a settled credit purchase, and the smaller enum has fewer states to get wrong. |
 | **Fork per customer** | Drowns after ~5 shops (D7). |
+| **Editing an entry in place** | The one thing the append-only rule exists to prevent. A crossed-out line in a notebook is still readable; an erased one is not (D1, D19). |
+| **`CommunityToolkit.Maui` for a long-press gesture** | A package for one gesture on one screen (D20). |
 | **In-memory EF provider for data tests** | Would not have caught the decimal-storage or WAL-sidecar problems. The data tests use real files. |
 
 ---

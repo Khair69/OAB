@@ -127,19 +127,19 @@ dotnet format
 
 ## 4. Test inventory
 
-**75 tests, all passing** (verified by running all three suites).
+**96 tests, all passing** (verified by running all three suites).
 
 | Suite | Target | Tests | Runs in CI | Covers |
 |---|---|---:|---|---|
-| [`Oab.Core.Tests`](../tests/Oab.Core.Tests) | `net10.0` | **32** | ✅ | Ledger math, `LedgerService`, money formatting, summary report |
+| [`Oab.Core.Tests`](../tests/Oab.Core.Tests) | `net10.0` | **42** | ✅ | Ledger math incl. correction arithmetic, `LedgerService`, money formatting, summary report |
 | [`Oab.Data.Tests`](../tests/Oab.Data.Tests) | `net10.0` | **13** | ✅ | Real SQLite + real migrations, decimal fidelity, role filtering, backup/restore |
-| [`Oab.App.Tests`](../tests/Oab.App.Tests) | `net10.0-windows10.0.19041.0` | **30** | ❌ (needs the MAUI workload) | View models: balance→text/colour, role filtering, pay-remaining, statement running balance, backup summary |
+| [`Oab.App.Tests`](../tests/Oab.App.Tests) | `net10.0-windows10.0.19041.0` | **41** | ❌ (needs the MAUI workload) | View models: balance→text/colour, role filtering, pay-remaining, statement running balance, the correction flow, backup summary |
 
 ### `Oab.App.Tests` breakdown
 
 | File | Tests | Focus |
 |---|---:|---|
-| `PartyStatementViewModelTests` | 12 | Running balance, ordering, corrections, the perspective colour matrix, Arabic labels |
+| `PartyStatementViewModelTests` | 23 | Running balance, ordering, the perspective colour matrix, Arabic labels; and the correction flow — balance moves while history does not, correcting to zero, the document's outstanding following, the five refusals, prompt text |
 | `PurchasesViewModelTests` | 4 | Credit vs cash listing, pay-remaining, form validation |
 | `SuppliersViewModelTests` | 3 | You-owe display, payment settling, role filtering |
 | `CustomersViewModelTests` | 4 | Debt/collection cycle, partial payment, role filtering |

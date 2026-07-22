@@ -55,11 +55,11 @@ no internet required, ever.
 | **Platform** | .NET 10 · .NET MAUI · Android (primary) + Windows (desk testing) |
 | **Storage** | SQLite via EF Core 10.0.9, one file per shop, on-device only |
 | **MVVM** | CommunityToolkit.Mvvm 8.4.2 |
-| **Tests** | xUnit — **75 tests, all passing** (32 core · 13 data · 30 view-model) |
+| **Tests** | xUnit — **96 tests, all passing** (42 core · 13 data · 41 view-model) |
 | **Solution projects** | 3 libraries + 4 feature modules + 1 customer head + 4 test projects |
 | **Migrations** | 2 (`InitialCreate`, `AddPartyRoles`) |
-| **Localized strings** | 70 keys × 2 languages (English, Arabic) |
-| **Screens** | 6 (Purchases list, New purchase, Suppliers, Customers, Backup, Party statement) |
+| **Localized strings** | 79 keys × 2 languages (English, Arabic) |
+| **Screens** | 6 (Purchases list, New purchase, Suppliers, Customers, Backup, Party statement) — plus the correction flow, which is dialogs over the statement |
 | **Network use** | None. The app never makes a network call. |
 
 ## The three rules
@@ -71,7 +71,9 @@ Decisions](09-decisions.md).
 1. **The ledger is append-only.** Every money movement is an immutable, signed
    `LedgerEntry`. Balances are always `SUM(entries)`. Corrections are new
    `Adjustment` entries carrying a mandatory note — never edits, never deletes.
-   There is no mutable balance column anywhere, and there never should be.
+   There is no mutable balance column anywhere, and there never should be. The
+   shopkeeper's way in is tapping an entry on the party statement and saying what
+   it should have been ([04 §9](04-app-shell.md#the-correction-flow)).
 
 2. **Custom work never touches core.** A shop that wants a special feature gets
    a new `IOabModule` in *their* customer folder. If a second shop wants it, it

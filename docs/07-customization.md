@@ -187,7 +187,7 @@ LabelOverrides = new Dictionary<string, string>
 Notes:
 
 - The prefix is the **two-letter ISO language name** — `ar`, `en`. Not `ar-SY`.
-- Any of the 70 keys in [06 §4](06-localization.md#4-resource-key-catalogue) can
+- Any of the 79 keys in [06 §4](06-localization.md#4-resource-key-catalogue) can
   be overridden, including flyout titles, empty-state text, prompts, error
   messages, and the backup summary headings.
 - Overriding a key used in the summary report changes the **backup text file**

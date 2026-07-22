@@ -26,6 +26,7 @@ src/Oab.App/
 ├── Resources/Strings.resx        English
 ├── Resources/Strings.ar.resx     Arabic
 └── Views/                        PartyStatementPage + ViewModel + StatementRow
+                                  + the correction flow (CorrectionOutcome)
 ```
 
 Targets `net10.0-android` and `net10.0-windows10.0.19041.0`; minimum Android API
@@ -310,15 +311,106 @@ an unknown kind shows something rather than an empty row.
 dark themes. Corrections are outlined, not hidden: an edited-looking history is
 the point. An `EmptyView` shows `Statement_Empty`.
 
+### The correction flow
+
+> Every mistake must be fixable. A shopkeeper who types 1000 instead of 100 and
+> cannot undo it stops using the app that afternoon.
+
+This screen is where a mistake gets fixed, because it is the only place an
+individual entry is visible at all. Nothing is edited: a correction is a new
+`Adjustment` entry that moves the balance to where it should have been.
+
+**The interaction.** Tap a row → an action sheet naming the one thing you can do
+→ a numeric prompt → a pre-filled reason prompt. Each step can be backed out of.
+
+```
+tap row
+  └─ action sheet:  "Correct entry"  [ Correct this entry | Cancel ]
+       └─ prompt:   "Purchase — recorded as: 1,000.00 SP
+                     What should the amount have been?"      [numeric]
+            └─ prompt: "Why? This is saved with the correction."
+                        pre-filled: "Was 1,000.00 SP"        [Save | Cancel]
+                 └─ Adjustment appended, page reloads
+```
+
+**Why a tap and a sheet, not a long-press.** The roadmap said long-press. MAUI
+has no long-press gesture, and `ContextFlyout` is Windows/macOS-only — a real
+long-press would mean taking a dependency on `CommunityToolkit.Maui` for one
+gesture, or writing a platform handler. Neither is worth it, and the tap turns
+out to be *better*: nothing on the statement announces that a row is tappable, so
+the action sheet is where the feature is discovered, and it is also what makes a
+stray tap harmless. The cost is one extra dialog on a rare, consequential action.
+
+**Why the reason is pre-filled.** The note is mandatory — `RecordAdjustmentAsync`
+throws on a blank one, and a correction nobody can explain a year later is worse
+than the mistake. But demanding a typed Arabic sentence on a phone keyboard is
+how a feature goes unused. The default (`"Was 1,000.00 SP"`) is already the most
+useful thing the note could say, so accepting it costs one tap and editing it is
+still there for anyone who wants to.
+
+**`CorrectAsync`** does the work and returns a `CorrectionOutcome`:
+
+| Outcome | When | What the page does |
+|---|---|---|
+| `Applied` | Posted, page reloaded | **Nothing** — the gold-outlined row and the new header balance are the feedback |
+| `AlreadyThatAmount` | `CorrectionDelta` returned 0 | "That is already the amount recorded." |
+| `InvalidAmount` | A negative was typed | "Enter the amount it should have been. Enter 0 if…" |
+| `NoteMissing` | Reason cleared | "A correction has to say why." |
+
+`AlreadyThatAmount` exists because `RecordAdjustmentAsync` *throws* on an
+adjustment of zero. Catching it here is what turns a crash into a sentence.
+
+Three details that are load-bearing:
+
+- **The amount is a magnitude.** The shopkeeper never sees or types a sign; the
+  direction comes from the entry being corrected. All of that arithmetic is
+  `LedgerMath.CorrectionDelta` in Core, where it is tested without a UI
+  ([02 §3](02-money-engine.md#correctiondelta--the-arithmetic-behind-fixing-a-typo)).
+- **The adjustment inherits `row.Entry.DocumentId`.** Correcting a purchase
+  therefore also corrects what that invoice has outstanding. Without it the party
+  balance would be right while the purchases list still offered to pay off the
+  old amount.
+- **It is stamped `DateTimeOffset.Now`, not the original date.** The correction
+  happened today. Back-dating it would quietly erase the days on which the book
+  was wrong, and those days are exactly what the statement exists to explain.
+
+Anything can be corrected, including a correction — the rule is uniform ("this
+row's number should have been X") and uniform rules have no edge cases. Zero is
+accepted and means "this never happened".
+
+**Exception handling.** The page now funnels `OnAppearing` and the tap handler
+through a private `RunAsync` that turns an exception into an alert, the same
+shape as `BackupPage`. `async void` handlers otherwise take the process down with
+no message, and correcting money is the last place that is acceptable. The global
+handler is still the next roadmap item; this is the local half.
+
+### The fourth amount parser
+
+`TryParseAmount` in this page's code-behind is the fourth copy of *try
+`CurrentCulture`, then `InvariantCulture`* (`NewPurchaseViewModel`,
+`SuppliersPage`, `CustomersPage` are the others). None of them read Arabic-Indic
+digits. That is one gap with four call sites, tracked in
+[10 §4](10-status.md#-arabic-indic-digits-can-be-displayed-but-not-typed) — the
+fix is a shared parser in Core, and it has to land in all four.
+
 ## 10. Test coverage
 
 [`tests/Oab.App.Tests/PartyStatementViewModelTests.cs`](../tests/Oab.App.Tests/PartyStatementViewModelTests.cs)
-— 12 of the suite's 30 tests: running-balance accumulation, newest-first
-ordering with the header matching the last balance, backdated entries, the
-sale→payment-in path, corrections (labelled, flagged, note shown, original
-untouched), an empty party, entries not leaking between parties, reload
-idempotence, the seven-case colour matrix, settled never being alarming, and
-Arabic labels.
+— 23 of the suite's 41 tests.
+
+*Reading the statement:* running-balance accumulation, newest-first ordering with
+the header matching the last balance, backdated entries, the sale→payment-in
+path, an adjustment rendered as a labelled correction with the original
+untouched, an empty party, entries not leaking between parties, reload
+idempotence, the seven-case colour matrix, settled never being alarming, Arabic
+labels.
+
+*Correcting an entry:* the balance moves while history does not, correcting to
+zero cancels an entry that never happened, the document's outstanding follows,
+a payment is corrected in the payment's own direction, a correction can itself be
+corrected, the five cases that post nothing (a negative amount; a blank,
+whitespace, or null note; and the amount already recorded), and the exact text of
+both prompts.
 
 ---
 
