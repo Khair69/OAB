@@ -73,17 +73,46 @@ hardcoded left/right positions in any page.
 output only** — dates use standard culture formatting, and the `Settled:` count
 in the summary report is plain.
 
-**Input is a known gap.** `NewPurchaseViewModel.TryParseAmount` tries
-`CurrentCulture` then `InvariantCulture`; neither parses Arabic-Indic digits. A
-shop with this option on renders `٥٠` but cannot read `٥٠` back. The same
-two-culture attempt is copied in `SuppliersPage`, `CustomersPage`, and
-`PartyStatementPage` — **four call sites for one missing function**, which is a
-map-to-ASCII helper next to `MapDigits` in Core.
+**Input is handled by [`MoneyInput.TryParseAmount`](02-money-engine.md#the-inverse--moneyinputcs)**,
+Core's counterpart to the formatter and the only amount parser in the codebase.
+It reads Arabic-Indic digits, the extended (Persian) forms some Android keyboards
+offer, `٫` and `٬`, the `،` comma key, and the invisible bidi marks an RTL entry
+field can wrap around what was typed. Reasoning in D23.
 
-Because of this, `Correct_InvalidAmount` says **"أدخل صفرًا"** — the word — rather
-than the digit `٠` it would naturally use. Instructing someone to type a
-character the app cannot parse is worse than being slightly less idiomatic.
-Revisit the wording once input is fixed.
+This was a gap until 2026-07-23, and an instructive one: four screens each
+carried their own copy of *try `CurrentCulture`, then `InvariantCulture`*, so the
+app rendered `٥٠` and then could not read `٥٠` back. **One function, four call
+sites, and nobody's job to write it.**
+
+### What `ar` actually does to a number
+
+Worth knowing before touching this code, because it is not what an English
+reader expects. Under .NET 10 (ICU), `ar` and `ar-SY` report:
+
+| | `ar` | `en-US` |
+|---|---|---|
+| Decimal separator | `٫` U+066B | `.` |
+| Group separator | `٬` U+066C | `,` |
+
+So with the app in Arabic, `MoneyFormat.Format(1250.50m, ar)` already prints
+**`1٬250٫50`** — Arabic separators around ASCII digits — before
+`UseArabicIndicDigits` is switched on at all. Turn it on and 1250.50 becomes
+**`١٬٢٥٠٫٥٠`**, containing no ASCII character whatsoever. That string is what the
+correction flow pre-fills into its note prompt and what a shopkeeper may retype,
+which is why `MoneyInputTests.TheShippingConfiguration_RoundTrips` exists.
+
+### `Correct_InvalidAmount` — a wording note, revisited
+
+The Arabic string says **"أدخل صفرًا"** — the word "zero" — where the English says
+"Enter 0". That was originally a workaround: instructing someone to type `٠` when
+the app could not parse `٠` would have been worse than being slightly less
+literal.
+
+**The constraint is gone; the wording stays.** `٠` now parses, so this is no
+longer a workaround — it is a choice, made on its own merit. A lone digit glyph
+inside a sentence of Arabic prose is small, easy to skim past, and easy to
+mistake for punctuation; the spelled-out word cannot be misread. Recorded here so
+the next person does not "fix" it back.
 
 ## 4. Resource key catalogue
 

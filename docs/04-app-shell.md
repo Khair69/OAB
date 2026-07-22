@@ -541,14 +541,24 @@ shared `RunSafelyAsync` (§9). This page's private `RunAsync` — one of the two
 copies that motivated hoisting it — is gone. Correcting money is the last place a
 silent crash is acceptable, and now the failure is both shown and recorded.
 
-### The fourth amount parser
+### The amount parser — and what used to be here
 
-`TryParseAmount` in this page's code-behind is the fourth copy of *try
-`CurrentCulture`, then `InvariantCulture`* (`NewPurchaseViewModel`,
-`SuppliersPage`, `CustomersPage` are the others). None of them read Arabic-Indic
-digits. That is one gap with four call sites, tracked in
-[10 §4](10-status.md#-arabic-indic-digits-can-be-displayed-but-not-typed) — the
-fix is a shared parser in Core, and it has to land in all four.
+The correction amount goes through
+[`MoneyInput.TryParseAmount`](02-money-engine.md#the-inverse--moneyinputcs), the
+one parser in the codebase.
+
+This page's code-behind used to carry its own `TryParseAmount`: the **fourth**
+copy of *try `CurrentCulture`, then `InvariantCulture`* (`NewPurchaseViewModel`,
+`SuppliersPage`, and `CustomersPage` held the others), and none of the four read
+Arabic-Indic digits. All four are gone; the private `RunAsync` above went the
+same way, for the same reason.
+
+It matters most here. This prompt is pre-filled with an amount the app itself
+rendered — under `ar` with Arabic-Indic digits that is `١٬٢٥٠٫٥٠`, containing no
+ASCII character at all — and a shopkeeper correcting a typo will often retype
+what they see. Being unable to read back a number you just displayed, on the
+screen whose entire purpose is fixing wrong numbers, is the sharpest version of
+the bug. See D23.
 
 ## 11. Test coverage
 

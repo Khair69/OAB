@@ -24,12 +24,14 @@ and an honest status inventory. Start at the
 
 .NET 10 · .NET MAUI (Android first, Windows for desk testing) · SQLite + EF Core
 · CommunityToolkit.Mvvm · xUnit. Arabic RTL + English with live language
-switching, per-shop wording, optional Arabic-Indic digits.
+switching, per-shop wording, optional Arabic-Indic digits — rendered *and* read
+back.
 
 ### Layout
 
 ```
-src/Oab.Core          Money engine. Pure C#: Party, LedgerEntry, LedgerService. No UI/DB deps.
+src/Oab.Core          Money engine. Pure C#: Party, LedgerEntry, LedgerService,
+                      MoneyFormat/MoneyInput. No UI/DB deps.
 src/Oab.Data          EF Core + SQLite: OabDbContext, LedgerStore, migrations.
 src/Oab.App           Shared MAUI shell: module host (IOabModule), OabShell flyout,
                       localization (Strings.resx + ar), ShopConfig, money formatting,
@@ -84,9 +86,9 @@ dotnet build customers/Oab.Customer.Template -f net10.0-windows10.0.19041.0   # 
 dotnet build customers/Oab.Customer.Template -f net10.0-android               # APK
 ```
 
-Test layout: `Oab.Core.Tests` (ledger math), `Oab.Data.Tests` (real SQLite +
-migrations), `Oab.App.Tests` (view models — balance→text/colour, role
-filtering, pay-remaining — plus the error log; runs headlessly on Windows).
+Test layout: `Oab.Core.Tests` (ledger math, money in and out), `Oab.Data.Tests`
+(real SQLite + migrations), `Oab.App.Tests` (view models — balance→text/colour,
+role filtering, pay-remaining — plus the error log; runs headlessly on Windows).
 `Oab.TestSupport` holds the shared in-memory store. Only the first two run in
 CI, since the MAUI tests need the Windows MAUI workload.
 
@@ -94,6 +96,11 @@ CI, since the MAUI tests need the Windows MAUI workload.
 `Oab.App.Tests`.** The in-memory store runs LINQ-to-Objects and will pass queries
 the SQLite provider refuses to translate — that gap hid a `NotSupportedException`
 on two shipped screens until the global exception handler surfaced it.
+
+**Parse typed amounts with `MoneyInput.TryParseAmount`, never `decimal.TryParse`.**
+The app renders Arabic-Indic digits, and .NET's `ar` uses `٫` and `٬` as its
+separators, so a raw parse cannot read the app's own output. One parser, in Core,
+where the tests are cheap.
 
 After any manual run, read the crash log. It is at
 `FileSystem.AppDataDirectory/errors.log`, and on a device the backup screen has a

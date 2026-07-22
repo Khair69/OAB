@@ -127,11 +127,11 @@ dotnet format
 
 ## 4. Test inventory
 
-**117 tests, all passing** (verified by running all three suites).
+**152 tests, all passing** (verified by running all three suites).
 
 | Suite | Target | Tests | Runs in CI | Covers |
 |---|---|---:|---|---|
-| [`Oab.Core.Tests`](../tests/Oab.Core.Tests) | `net10.0` | **42** | ✅ | Ledger math incl. correction arithmetic, `LedgerService`, money formatting, summary report |
+| [`Oab.Core.Tests`](../tests/Oab.Core.Tests) | `net10.0` | **77** | ✅ | Ledger math incl. correction arithmetic, `LedgerService`, money formatting **and parsing**, summary report |
 | [`Oab.Data.Tests`](../tests/Oab.Data.Tests) | `net10.0` | **16** | ✅ | Real SQLite + real migrations, decimal fidelity, newest-first ordering, role filtering, backup/restore |
 | [`Oab.App.Tests`](../tests/Oab.App.Tests) | `net10.0-windows10.0.19041.0` | **59** | ❌ (needs the MAUI workload) | View models: balance→text/colour, role filtering, pay-remaining, statement running balance, the correction flow, backup summary; plus the error log |
 
@@ -145,6 +145,21 @@ dotnet format
 | `SuppliersViewModelTests` | 3 | You-owe display, payment settling, role filtering |
 | `CustomersViewModelTests` | 4 | Debt/collection cycle, partial payment, role filtering |
 | `BackupViewModelTests` | 3 | Localized summary content, empty book, the error-report card staying hidden until something is logged |
+
+### `Oab.Core.Tests` breakdown
+
+| File | Tests | Focus |
+|---|---:|---|
+| `MoneyInputTests` | 35 | Amount parsing: Arabic-Indic and extended Arabic-Indic digits, `٫` `٬` `،`, bidi marks, mixed digit sets, both cultures each way, round trip against `MoneyFormat` under `en-US` and under the shipping `ar` + Arabic-Indic configuration |
+| `LedgerMathTests` | 19 | Sign convention, `CorrectionDelta`, the guards |
+| `LedgerServiceTests` | 13 | Every way money can move, incl. adjustments preserving history |
+| `LedgerSummaryReportTests` | 5 | Sections, totals, line endings, Arabic-Indic digits |
+| `MoneyFormatTests` | 5 | Grouping, decimals, symbol, sign dropping, digit shaping |
+
+`MoneyInputTests` is the largest file in the suite, deliberately. Its bug surface
+is "which of a dozen Unicode characters did the keyboard emit", each case costs
+one line, and the alternative was four untested copies in page code-behind
+(D23).
 
 `ErrorLogTests` and `Oab.Data.Tests` both write real files into the temp
 directory. That is deliberate in both cases: the value of `ErrorLog` is what it

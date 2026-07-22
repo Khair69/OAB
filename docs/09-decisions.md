@@ -448,6 +448,56 @@ SQLite's type system is thin, and the price is paid in C#.
 
 ---
 
+## D23 — One amount parser, in Core, mapping separators per-culture
+
+**Context.** Four screens — new purchase, suppliers, customers, and the
+correction prompt — each carried its own private copy of:
+
+```csharp
+decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out amount)
+|| decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out amount)
+```
+
+None of them could read Arabic-Indic digits. So a shop with
+`UseArabicIndicDigits` on would render `٥٠` on one screen and reject `٥٠` typed
+on the next — **the app could not read its own output.**
+
+**Decision.** One function, `MoneyInput.TryParseAmount`, in `Oab.Core.Formatting`
+beside `MoneyFormat`. All four call sites now delegate to it and the four private
+copies are gone.
+
+**Why Core and not a shared UI helper.** Same reason `MoneyFormat` is there: it
+is pure, it is where the digit-shaping rules already live, and Core is the only
+layer with tests that run without a MAUI runtime (D8). A parser whose bug surface
+is "which of a dozen Unicode characters did the keyboard emit" needs 35 cheap
+tests, not four expensive ones. Putting the inverse anywhere else would also have
+let the two halves drift apart — the invariant *"anything the app prints, the app
+can read back"* is only checkable if both ends are in the same assembly.
+
+**The one subtle line.** The Arabic decimal separator `٫` is mapped to
+**`culture.NumberFormat.NumberDecimalSeparator`**, not to a fixed `.`. Under a
+culture where `.` is a *grouping* separator, the obvious normalise-to-ASCII
+approach turns `١٢٣٫٥` into `123.5` and then parses it as **1235** — a silent
+factor-of-ten error in a ledger, which is the worst class of bug this product
+can have. Mapping per-culture makes the value survive both passes.
+
+This also means the `ar` facts have to be known rather than assumed: .NET's `ar`
+uses `٫` for the decimal point and `٬` for grouping
+([06 §3](06-localization.md#what-ar-actually-does-to-a-number)), so under Arabic
+the app was *already* printing separators no ASCII parser would accept.
+
+**It parses; it does not judge.** Negatives and zero return `true`. Whether an
+amount is *sensible* differs per screen — a correction accepts zero and means
+"this never happened" (D19); a new purchase rejects it — so validation stays with
+the caller that knows the rule. A parser that also enforced policy would have
+needed a flag per call site, which is four copies again wearing a different hat.
+
+**Consistent with D22's lesson,** applied one layer up: the bug was not that the
+old parser was wrong, but that it existed four times and was tested zero times.
+Duplication is how a codebase hides the fact that something is untested.
+
+---
+
 ## Rejected alternatives, briefly
 
 | Considered | Rejected because |
@@ -464,6 +514,8 @@ SQLite's type system is thin, and the price is paid in C#.
 | **A base `OabPage` class carrying the exception funnel** | Every page in every module would have to inherit it. `RunSafelyAsync` is an extension method so a module can hold a plain `ContentPage` (D21). |
 | **Swallowing the exception in the global handler to keep the app alive** | Carrying on in an unknown state can write a wrong number, which is worse than closing (D21). |
 | **A third-party crash reporter** | Needs a network. The product's defining constraint is that it works offline, indefinitely. |
+| **Normalising Arabic digits and separators to plain ASCII before parsing** | Turns `١٢٣٫٥` into `123.5`, which reads as **1235** under any culture where `.` groups. Silent factor-of-ten errors are the worst bug a ledger can have (D23). |
+| **A `NumberEntry` control that only accepts what the app can parse** | Fixes the symptom at the keyboard and leaves the four parsers in place; also fights the platform keyboard, which is the thing least likely to behave as expected on a cheap Android phone. |
 
 ---
 

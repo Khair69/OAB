@@ -1,8 +1,8 @@
-using System.Globalization;
 using Oab.App.Diagnostics;
 using Oab.App.Localization;
 using Oab.App.Views;
 using Oab.Core.Domain;
+using Oab.Core.Formatting;
 
 namespace Oab.Modules.CustomerDebts;
 
@@ -79,8 +79,7 @@ public partial class CustomersPage : ContentPage
         if (string.IsNullOrWhiteSpace(text))
             return;
 
-        if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out var amount)
-            || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out amount))
+        if (MoneyInput.TryParseAmount(text, out var amount))
         {
             await action(amount);
         }

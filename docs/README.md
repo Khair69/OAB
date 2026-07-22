@@ -29,7 +29,7 @@ no internet required, ever.
 | # | Document | Answers |
 |---|---|---|
 | 01 | [Architecture](01-architecture.md) | How the layers fit, what depends on what, what happens at startup |
-| 02 | [The Money Engine](02-money-engine.md) | The append-only ledger, sign convention, every `LedgerService` method, worked examples |
+| 02 | [The Money Engine](02-money-engine.md) | The append-only ledger, sign convention, every `LedgerService` method, worked examples, money in and out of a string |
 | 03 | [Data Layer](03-data-layer.md) | SQLite schema, EF Core mapping, migrations, the backup/restore machinery |
 | 04 | [App Shell](04-app-shell.md) | `OabApp`, `OabShell`, `ShopConfig`, localization internals, crash logging, the party statement screen |
 | 05 | [Feature Modules](05-modules.md) | Every screen in the product, and how to write a new module |
@@ -55,7 +55,7 @@ no internet required, ever.
 | **Platform** | .NET 10 · .NET MAUI · Android (primary) + Windows (desk testing) |
 | **Storage** | SQLite via EF Core 10.0.9, one file per shop, on-device only |
 | **MVVM** | CommunityToolkit.Mvvm 8.4.2 |
-| **Tests** | xUnit — **117 tests, all passing** (42 core · 16 data · 59 view-model + error log) |
+| **Tests** | xUnit — **152 tests, all passing** (77 core · 16 data · 59 view-model + error log) |
 | **Solution projects** | 3 libraries + 4 feature modules + 1 customer head + 4 test projects |
 | **Migrations** | 2 (`InitialCreate`, `AddPartyRoles`) |
 | **Localized strings** | 81 keys × 2 languages (English, Arabic) |
@@ -93,3 +93,12 @@ and written to a shareable `errors.log`
 shopkeeper's phone there is no console and no network, so a crash that leaves no
 record is a bug that can never be fixed. Within 25 seconds of this landing it
 revealed that two of the six screens had never once loaded successfully.
+
+### And one shortcut that keeps being wrong
+
+**A rule copied into two screens is a rule nobody tests.** Nobody writes a test
+for a private helper in a page's code-behind, so duplicated logic is untested by
+construction — that is how four amount parsers came to exist, none of which could
+read the digits the app itself prints ([09 D23](09-decisions.md#d23--one-amount-parser-in-core-mapping-separators-per-culture)).
+When a rule appears twice, it belongs in `Oab.Core`, where it has no dependencies
+and a test costs one line.

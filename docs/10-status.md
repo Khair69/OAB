@@ -4,8 +4,8 @@
 
 ---
 
-An honest inventory of what exists, as of the global-exception-handler change
-(2026-07-22). This is the document to read before deciding what to build next;
+An honest inventory of what exists, as of the shared amount-parser change
+(2026-07-23). This is the document to read before deciding what to build next;
 the schedule for doing so is [`ROADMAP.md`](ROADMAP.md).
 
 ---
@@ -27,12 +27,12 @@ the schedule for doing so is [`ROADMAP.md`](ROADMAP.md).
 | Restore with validation + `.pre-restore` safety copy | ✅ Complete | `DatabaseBackupService` |
 | Arabic + English, live switching, RTL | ✅ Complete | `LocalizationManager` |
 | Arabic-Indic digit **output** | ✅ Complete | `MoneyFormat` |
+| **Arabic-Indic digit input — every amount box, one parser** | ✅ Complete | `MoneyInput` |
 | Per-shop wording via `LabelOverrides` | ✅ Complete | `ShopConfig` |
 | Automatic schema migration on upgrade | ✅ Implemented, ❗untested with real data | `OabApp` |
 | Module system + per-shop composition | ✅ Complete (one head exists) | `IOabModule`, `UseOab` |
 | **Global exception handling — every handler funnelled, every crash logged** | ✅ Complete | `Oab.App/Diagnostics` |
 | **Shareable error log** | ✅ Complete | `ErrorLog`, backup screen card |
-| Arabic-Indic digit **input** | ❌ Missing | see §4 |
 | Editing a party (phone, note, archive) | ❌ No screen | see §3 |
 | Document line items in the UI | ❌ Engine only | see §3 |
 | Sales module (cash sales, receipts) | ❌ Not built | — |
@@ -186,18 +186,33 @@ with no real-SQLite test has never actually run** — is now in
 exists and its tests pass", not "a person has seen it work". The two remaining
 🔴 items are exactly the ones that need a person.
 
-### 🟠 Arabic-Indic digits can be displayed but not typed
+### ✅ Closed — Arabic-Indic digits could be displayed but not typed
 
-`ShopConfig.UseArabicIndicDigits` renders `٥٠`.
-`NewPurchaseViewModel.TryParseAmount` (`:78`) tries `CurrentCulture` then
-`InvariantCulture`; neither parses `٥٠`. The prompt-based parsers in
-`SuppliersPage`, `CustomersPage`, and now `PartyStatementPage` (the correction
-amount) have the same limitation — **four call sites, one missing function.**
+`ShopConfig.UseArabicIndicDigits` rendered `٥٠`, and nothing in the app could
+read `٥٠` back. Four screens each carried a private *try `CurrentCulture`, then
+`InvariantCulture`* — one missing function with four call sites.
 
-*Fix:* map Arabic-Indic digits to ASCII before parsing — the inverse of
-`MoneyFormat.MapDigits`, and it belongs next to it in Core so it is tested there.
-Replace all four call sites in the same change. Until then, do not enable the
-option for a shop.
+Closed by [`MoneyInput.TryParseAmount`](../src/Oab.Core/Formatting/MoneyInput.cs)
+in Core, beside `MoneyFormat`, with all four call sites delegating to it and the
+four copies deleted. It reads Arabic-Indic digits, the extended (Persian) forms
+some Android keyboards offer, `٫` `٬` `،`, and the invisible bidi marks an RTL
+entry field can wrap around the text. 35 tests
+([`MoneyInputTests`](../tests/Oab.Core.Tests/MoneyInputTests.cs)), reasoning in
+D23, the parser's table in
+[02 §6](02-money-engine.md#the-inverse--moneyinputcs).
+
+**What it turned up on the way.** .NET's `ar` uses `٫` as its decimal separator
+and `٬` for grouping, so under Arabic the app was *already* printing separators
+that a plain ASCII parser would reject — even with `UseArabicIndicDigits` off.
+Fully configured, 1250.50 renders as `١٬٢٥٠٫٥٠`, containing no ASCII character at
+all. That string is pre-filled into the correction flow's note prompt, so the one
+screen for fixing wrong numbers was the one most likely to be handed a number it
+could not read. Pinned by `TheShippingConfiguration_RoundTrips`.
+
+Verified on Windows only, like everything else — but this is a pure function over
+strings, so a phone can only change *what the keyboard emits*, not what the
+parser does with it. If a real device produces a character not in the table, the
+fix is one `case`.
 
 ### 🟠 Nothing has been verified on real Android hardware in Arabic
 
@@ -247,6 +262,13 @@ Full list: [08 §8](08-build-test-release.md#8-release--what-is-missing).
   Expected and safe — `VACUUM INTO` cannot be parameterised and the path is
   escaped — but it should be suppressed with a `#pragma` and a comment so it
   stops being noise that trains people to ignore warnings.
+- **`CS8602` warning** on every build of `Oab.Modules.Purchases`
+  ([`NewPurchaseViewModel.cs:87`](../src/Oab.Modules/Oab.Modules.Purchases/NewPurchaseViewModel.cs)).
+  `supplier` is provably non-null by then — `SaveAsync` returns early when it is
+  null and no name was typed — but the flow-analysis cannot see it across the two
+  `if`s. Harmless, and it predates the amount-parser change; noted so it is not
+  mistaken for a regression. Same treatment as `EF1002`: restructure or suppress
+  with a comment, so the build has no warnings anyone has learned to ignore.
 - **Dead scaffolding** in the customer template: `Platforms/iOS/`,
   `Platforms/MacCatalyst/`, and `Resources/Images/dotnet_bot.png` are all
   committed but unused. (`.vs/` and `*.csproj.user` exist on disk but are
@@ -297,8 +319,8 @@ Derived from the sections above, weighted by damage prevented per hour spent:
 1. ~~**Correction flow**~~ — done.
 2. ~~**Global exception handler**~~ — done, and it immediately found a
    `NotSupportedException` on two screens.
-3. **Arabic-Indic digit input** — a small pure function in Core, with tests, then
-   four call sites.
+3. ~~**Arabic-Indic digit input**~~ — done: `MoneyInput` in Core, 35 tests, four
+   call sites replaced and their private copies deleted.
 4. **Run on a real Android phone in Arabic** — may invalidate assumptions. The
    correction flow's three stacked dialogs are the first thing to watch a real
    person get through. **Read `errors.log` afterwards**, whether or not anything
@@ -313,6 +335,12 @@ Derived from the sections above, weighted by damage prevented per hour spent:
 without a test against real SQLite should be treated as untested code, not as
 working code. Three exist today — `UpdatePartyAsync`, `GetDocumentAsync`, and
 `GetEntriesForDocumentAsync` — and the first two have no caller either (§3).
+
+**A second standing item, from step 3:** the same logic copied into four screens
+is untested by construction — nobody writes a test for a private method in a
+page's code-behind. When a rule shows up twice, it belongs in Core, where the
+tests are cheap. Steps 2 and 3 both closed bugs whose real cause was *where the
+code lived*, not what it said.
 
 ---
 

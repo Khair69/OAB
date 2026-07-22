@@ -29,6 +29,13 @@ global exception handler found it within half a minute of being installed.
 Assume, from here on, that **a store method with no real-SQLite test is not
 written yet** — it is a guess that compiles.
 
+**A fourth, from the first item of Week 2.** The amount parser was copied into
+four screens, so it was untested four times over — nobody writes a test for a
+private helper in a page's code-behind. The bug was not in what that code said;
+it was in where it lived. **Logic duplicated across screens is untested by
+construction.** When a rule appears twice, it belongs in Core, where a test costs
+nothing. Both of Week 1's real bugs and this one share that shape.
+
 ---
 
 ## Week 1 — Make the ledger trustworthy
@@ -83,13 +90,28 @@ Everything so far is verified on Windows. That proves almost nothing about a
 cheap Android phone in Arabic — and, as Week 1 discovered, "verified on Windows"
 had been quietly untrue for two screens.
 
+- [x] **Arabic-Indic digit input.** Closed first, because it was the one item on
+  this list that could be finished without a phone in hand — and because it
+  turned out to be worse than described. `MoneyInput.TryParseAmount` now lives in
+  Core beside `MoneyFormat`, reads Arabic-Indic and extended Arabic-Indic digits,
+  `٫` `٬` `،`, and bidi marks, and is the **only** amount parser in the codebase;
+  the four private copies are deleted. 35 tests.
+  **What the roadmap had wrong:** this was written as "if a user types ٥٠ it
+  likely fails." The real scope is bigger — .NET's `ar` uses `٫` as its decimal
+  separator and `٬` for grouping, so under Arabic the app was already *printing*
+  separators no ASCII parser accepts, `UseArabicIndicDigits` or not. Fully
+  configured, 1,250.50 renders `١٬٢٥٠٫٥٠` — no ASCII in it — and that is the
+  string the correction flow pre-fills for a shopkeeper to retype. The screen for
+  fixing wrong numbers was the one most likely to be handed a number it could not
+  read.
 - **Run on actual hardware.** Verify RTL layout, Arabic font rendering,
   `DatePicker` under `ar`, the numeric keyboard, and the decimal separator.
   **Then read `errors.log` from the backup screen**, whether or not anything
   looked wrong. That habit is the whole return on Week 1's last item.
-- **Arabic-Indic digit input.** `TryParseAmount` only tries CurrentCulture then
-  Invariant — if a user types ٥٠ it likely fails. We render those digits but
-  can't read them back. Four call sites now, including the correction amount.
+  *Now also:* type `٥٠` into every amount box. The parser is unit-tested, but
+  what the Arabic keyboard actually emits on a real device is not something a
+  Windows test can tell you — if a character comes through that the table misses,
+  the fix is one `case`.
 - **Branding** — real icon, Arabic app name, per-shop `ApplicationId` (still
   `com.companyname.*`), version scheme.
 - **Signed release APK** and documented keystore handling. Debug APKs aren't
@@ -97,6 +119,11 @@ had been quietly untrue for two screens.
 - **Upgrade test** — install v1, enter real data, install v2 carrying a new
   migration, confirm nothing is lost. The `Database.Migrate()` promise is
   currently untested against real data.
+
+**One of five.** The remaining four all need either a physical phone or a signing
+key — there is no more of Week 2 that can be finished at a desk. The gating item
+is getting the app onto hardware; branding and the APK can be done in parallel
+with it, and the upgrade test needs the APK first.
 
 ## Week 3 — Fit the daily workflow, and scale
 

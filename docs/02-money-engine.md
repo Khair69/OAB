@@ -23,7 +23,8 @@ src/Oab.Core/
 │   │                     SignedAmount, CorrectionDelta
 │   └── LedgerService.cs  Use-case layer: every way money can move
 ├── Formatting/
-│   └── MoneyFormat.cs    decimal → string, incl. Arabic-Indic digit shaping
+│   ├── MoneyFormat.cs    decimal → string, incl. Arabic-Indic digit shaping
+│   └── MoneyInput.cs     string → decimal — the inverse, and the only parser
 └── Reporting/
     └── LedgerSummaryReport.cs   The whole book as human-readable plain text
 ```
@@ -354,6 +355,58 @@ separator stay whatever the culture says — only the digits are replaced.
 It lives in Core, not in the MAUI layer, so it can be unit-tested without
 spinning up a runtime — [`MoneyFormatTests`](../tests/Oab.Core.Tests/MoneyFormatTests.cs).
 
+### The inverse — [`MoneyInput.cs`](../src/Oab.Core/Formatting/MoneyInput.cs)
+
+```csharp
+static bool TryParseAmount(string? text, out decimal amount, CultureInfo? culture = null)
+```
+
+Every amount the shopkeeper types comes through here. It is the **only** amount
+parser in the codebase; before it there were four copies of *try
+`CurrentCulture`, then `InvariantCulture`*, none of which could read the digits
+`MoneyFormat` prints one screen earlier.
+
+It normalises before parsing, then makes the same two passes the old copies did:
+
+| Typed | Why it appears | Becomes |
+|---|---|---|
+| `٠`–`٩` (U+0660–0669) | What `MoneyFormat` renders | `0`–`9` |
+| `۰`–`۹` (U+06F0–06F9) | Extended Arabic-Indic — some Android keyboards offer these instead, and the two sets are hard to tell apart on screen | `0`–`9` |
+| `٫` ARABIC DECIMAL SEPARATOR | .NET's `ar` uses it as the decimal point | this culture's decimal separator |
+| `٬` ARABIC THOUSANDS SEPARATOR | .NET's `ar` uses it for grouping | dropped |
+| `،` ARABIC COMMA | the comma key an Arabic keyboard actually offers | dropped |
+| U+200E / U+200F / U+061C | bidi marks an RTL entry field can wrap the text in — invisible, and fatal to a parse | dropped |
+
+**The decimal separator is mapped per-culture, not to a fixed `.`** — that is the
+one subtle line in the class. Under a culture where `.` is a *grouping*
+separator, rewriting `١٢٣٫٥` to `123.5` and parsing it in that culture yields
+**1235**. Mapping to `culture.NumberFormat.NumberDecimalSeparator` instead means
+the value survives both passes: as `123٫5` under `ar`, and as `123.5` under the
+invariant retry.
+
+**It parses; it does not judge.** A negative or a zero comes back as `true` with
+that value. "Is this a number?" and "is this a sensible amount *here*?" are
+different questions with different answers per screen — a correction accepts
+zero and means "this never happened" (D19), a new purchase rejects it. The
+callers keep their own rules.
+
+| Input | Result |
+|---|---|
+| `"٥٠"` | `50` |
+| `"١٢٣٫٥"` | `123.5` |
+| `"١٬٥٠٠"` | `1500` |
+| `"١2٣"` — two keyboards, one number | `123` |
+| `"1250.50"` under `ar` | `1250.50` (the invariant pass) |
+| `"1,250.50"` under `en-US` | `1250.50` |
+| `""`, `"abc"`, `null` | `false`, `amount` left at `0` |
+| `"50.00 SP"` | `false` — a symbol is decoration the formatter adds; an amount box never contains one |
+
+The test that matters most is `TheShippingConfiguration_RoundTrips`: `ar` plus
+`UseArabicIndicDigits` prints 1250.50 as **`١٬٢٥٠٫٥٠`** — not one ASCII character
+in it — and that string must read back as 1250.50. See
+[`MoneyInputTests`](../tests/Oab.Core.Tests/MoneyInputTests.cs), and D23 for why
+this is one function in Core rather than four in the UI.
+
 ## 7. `LedgerSummaryReport` — [`LedgerSummaryReport.cs`](../src/Oab.Core/Reporting/LedgerSummaryReport.cs)
 
 Renders the entire book as plain text a shopkeeper can read in WhatsApp. This is
@@ -448,16 +501,18 @@ purchase must write both of its entries in one transaction.
 | A correction to a document also corrects that document | The adjustment inherits the entry's `DocumentId` |
 | A cash purchase and a settled credit purchase are indistinguishable in the data | Both are `Purchase` + `PaymentOut` totalling zero |
 | Money never becomes a `double` | `decimal` throughout, stored as TEXT in SQLite (see [03 §3](03-data-layer.md#3-why-decimals-are-stored-as-text)) |
+| Anything the app can print, the app can read back | `MoneyInput` is `MoneyFormat`'s inverse, pinned by round-trip tests in both cultures |
 
 ## 10. Test coverage
 
-[`tests/Oab.Core.Tests`](../tests/Oab.Core.Tests) — **42 tests, all passing.**
+[`tests/Oab.Core.Tests`](../tests/Oab.Core.Tests) — **77 tests, all passing.**
 
 | File | Covers |
 |---|---|
 | `LedgerMathTests` | Sign convention per kind, adjustment rejection, non-positive rejection, `Outstanding` positivity for both document directions, empty-ledger behaviour, `CorrectionDelta` in both directions plus correct-to-zero, already-correct, and its two guards |
 | `LedgerServiceTests` | Credit and cash purchases, partial and installment payments, sales, customer repayment, the same party as both roles, adjustments preserving history, adjustment validation, non-positive rejection, document lines, per-party balance map |
 | `MoneyFormatTests` | Grouping, two decimals, symbol placement, sign dropping, Arabic-Indic shaping |
+| `MoneyInputTests` | ASCII parsing unchanged; Arabic-Indic and extended Arabic-Indic digits; mixed digit sets; `٫` `٬` `،` and bidi marks; both cultures each way; negatives left to the caller; round trip against `MoneyFormat` under `en-US` and under the shipping `ar` + Arabic-Indic configuration |
 | `LedgerSummaryReportTests` | Section grouping, totals, omitted empty sections, empty book, platform-stable line endings, Arabic-Indic digits |
 
 ---

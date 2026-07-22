@@ -1,7 +1,7 @@
-using System.Globalization;
 using Oab.App.Diagnostics;
 using Oab.App.Localization;
 using Oab.Core.Domain;
+using Oab.Core.Formatting;
 
 namespace Oab.App.Views;
 
@@ -72,7 +72,7 @@ public partial class PartyStatementPage : ContentPage
             Loc["Common_Save"], Loc["Common_Cancel"], keyboard: Keyboard.Numeric);
         if (amountText is null)
             return;
-        if (!TryParseAmount(amountText, out var amount))
+        if (!MoneyInput.TryParseAmount(amountText, out var amount))
         {
             await DisplayAlertAsync(Loc["Common_Error"], Loc["Correct_InvalidAmount"], Loc["Common_OK"]);
             return;
@@ -98,13 +98,4 @@ public partial class PartyStatementPage : ContentPage
         if (message is not null)
             await DisplayAlertAsync(Loc["Correct_Title"], message, Loc["Common_OK"]);
     }
-
-    /// <summary>
-    /// Same two-culture attempt as the other amount inputs. Neither pass reads
-    /// Arabic-Indic digits yet — this is the fourth call site the fix has to
-    /// cover ([10 §4](../../docs/10-status.md)).
-    /// </summary>
-    private static bool TryParseAmount(string text, out decimal amount) =>
-        decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out amount)
-        || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
 }

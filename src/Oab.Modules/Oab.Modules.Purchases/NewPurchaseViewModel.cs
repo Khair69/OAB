@@ -1,10 +1,10 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Oab.App.Diagnostics;
 using Oab.App.Localization;
 using Oab.Core.Domain;
+using Oab.Core.Formatting;
 using Oab.Core.Ledger;
 
 namespace Oab.Modules.Purchases;
@@ -60,7 +60,7 @@ public partial class NewPurchaseViewModel(
     {
         Error = "";
 
-        if (!TryParseAmount(AmountText, out var amount) || amount <= 0m)
+        if (!MoneyInput.TryParseAmount(AmountText, out var amount) || amount <= 0m)
         {
             Error = localization["Common_InvalidAmount"];
             return;
@@ -98,8 +98,4 @@ public partial class NewPurchaseViewModel(
             Error = $"{localization["Common_Error"]}: {ex.Message}";
         }
     }
-
-    private static bool TryParseAmount(string text, out decimal amount) =>
-        decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out amount)
-        || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
 }

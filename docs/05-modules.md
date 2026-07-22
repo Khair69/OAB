@@ -120,9 +120,15 @@ Validating the amount *first* is what makes
 `NewPurchase_InvalidAmount_SetsError_AndCreatesNoParty` pass — a bad amount never
 leaves an orphan supplier behind.
 
-`TryParseAmount` tries `CultureInfo.CurrentCulture` then `InvariantCulture`.
-**It does not handle Arabic-Indic digits** — the app renders `٥٠` but cannot read
-it back. See [10 §4](10-status.md#4-known-gaps-and-risks).
+The amount is parsed by
+[`MoneyInput.TryParseAmount`](02-money-engine.md#the-inverse--moneyinputcs) —
+Core's single parser, which reads Arabic-Indic digits and the separators an
+Arabic keyboard emits (D23). It returns `true` for zero and for negatives; the
+`≤ 0` rejection above is this screen's rule, not the parser's.
+
+A module must never write its own amount parser. This one used to, along with
+`SuppliersPage` and `CustomersPage` — four copies, none of which could read the
+digits the app prints.
 
 ---
 
@@ -326,6 +332,11 @@ app:
 - Depend on `ILedgerStore` for reads and `LedgerService` for writes. **Never
   construct a `LedgerEntry`.**
 - Depend on `IMoneyFormatter`, never on `MoneyFormat` directly.
+- Parse every typed amount with `MoneyInput.TryParseAmount`
+  (`using Oab.Core.Formatting;`). **Never call `decimal.TryParse` on something a
+  shopkeeper typed** — the app renders Arabic-Indic digits and `.NET`'s `ar`
+  renders `٫` and `٬`, so a raw `TryParse` cannot read the app's own output
+  (D23). Apply your screen's own rule (`> 0`, or zero-allowed) afterwards.
 - Render text and colour in the view model into an immutable `required init` row
   type. No `IValueConverter`s.
 - All display text goes through `{oab:Tr Key}` in XAML, or
