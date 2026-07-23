@@ -88,9 +88,14 @@ unpaid, and the outstanding amount.
 reloads. The button is bound via `Source={x:Reference ThisPage}` because the
 command lives on the page's view model, not on the row.
 
-> ⚠️ `LoadAsync` calls `GetEntriesForDocumentAsync` **once per document inside
-> the loop** — an N+1 query. Fine at 10 purchases, painful at 2,000. See
-> [10 §4](10-status.md#4-known-gaps-and-risks).
+> `LoadAsync` used to call `GetEntriesForDocumentAsync` **once per document
+> inside the loop** — one database round trip per row, on every `OnAppearing`.
+> It now makes a single `GetEntriesForDocumentsAsync` call for the whole page and
+> reads each row's entries out of the returned dictionary with
+> `GetValueOrDefault(id, [])`. Three queries to draw the screen, whatever the row
+> count. If you write a list screen, copy this shape rather than the loop:
+> reasoning in D24, SQL in
+> [03 §4.2](03-data-layer.md#42-asking-about-many-invoices-at-once).
 
 ### New purchase
 
@@ -366,6 +371,19 @@ device preferences faked.
 `InMemoryLedgerStore` runs LINQ-to-Objects, so it will happily pass a query the
 SQLite provider refuses to translate. That gap hid a `NotSupportedException` on
 two shipped screens; see [03 §4](03-data-layer.md#client-side-evaluation-and-why).
+`SqliteTestDatabase` in `tests/Oab.Data.Tests` makes this three lines: construct
+it, use its `Store` and `Ledger`, dispose it. Every method on the interface has
+had this done to it, and the standing rule is that the next one added does too.
+
+**7. And add it to `InMemoryLedgerStore` with the same semantics** — ordering
+included. A fake that returns rows in a different order from the real store lets
+a screen pass every view-model test and still be wrong on a phone.
+
+**8. If the screen is a list, do not query inside the loop.** Both list shapes
+already exist — `GetBalancesAsync` for per-party numbers, `GetEntriesForDocumentsAsync`
+for per-invoice ones. One query returning a dictionary, read with
+`GetValueOrDefault`. The purchases list did it the other way for its whole life;
+see D24.
 
 ---
 

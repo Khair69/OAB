@@ -1,7 +1,4 @@
-using Microsoft.EntityFrameworkCore;
 using Oab.Core.Domain;
-using Oab.Core.Ledger;
-using Oab.Data;
 
 namespace Oab.Data.Tests;
 
@@ -12,57 +9,33 @@ namespace Oab.Data.Tests;
 /// </summary>
 public sealed class LedgerStoreSqliteTests : IDisposable
 {
-    private sealed class TestDbFactory(DbContextOptions<OabDbContext> options) : IDbContextFactory<OabDbContext>
-    {
-        public OabDbContext CreateDbContext() => new(options);
-    }
-
-    private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"oab-test-{Guid.NewGuid():N}.db");
-    private readonly LedgerStore _store;
-    private readonly LedgerService _service;
+    private readonly SqliteTestDatabase _db = new("oab-ledger");
     private static readonly DateTimeOffset Now = new(2026, 7, 8, 10, 0, 0, TimeSpan.FromHours(3));
 
-    public LedgerStoreSqliteTests()
-    {
-        var options = new DbContextOptionsBuilder<OabDbContext>()
-            .UseSqlite($"Data Source={_dbPath}")
-            .Options;
-        using (var db = new OabDbContext(options))
-        {
-            db.Database.Migrate();
-        }
-        _store = new LedgerStore(new TestDbFactory(options));
-        _service = new LedgerService(_store);
-    }
-
-    public void Dispose()
-    {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        File.Delete(_dbPath);
-    }
+    public void Dispose() => _db.Dispose();
 
     [Fact]
     public async Task FullFlow_PersistsAndBalances()
     {
         var supplier = new Party { Name = "Distributor A", Phone = "0555" };
-        await _store.AddPartyAsync(supplier);
+        await _db.Store.AddPartyAsync(supplier);
 
-        var doc = await _service.RecordPurchaseAsync(supplier.Id, 250m, paidNow: false, Now,
+        var doc = await _db.Ledger.RecordPurchaseAsync(supplier.Id, 250m, paidNow: false, Now,
             note: "shampoo crate", lines:
             [
                 new DocumentLine { Description = "Shampoo 400ml", Quantity = 25, UnitPrice = 10m },
             ]);
-        await _service.RecordPaymentOutAsync(supplier.Id, 100m, Now.AddDays(2), doc.Id);
+        await _db.Ledger.RecordPaymentOutAsync(supplier.Id, 100m, Now.AddDays(2), doc.Id);
 
-        Assert.Equal(-150m, await _service.GetPartyBalanceAsync(supplier.Id));
-        Assert.Equal(150m, await _service.GetDocumentOutstandingAsync(doc.Id));
+        Assert.Equal(-150m, await _db.Ledger.GetPartyBalanceAsync(supplier.Id));
+        Assert.Equal(150m, await _db.Ledger.GetDocumentOutstandingAsync(doc.Id));
 
-        var savedDoc = await _store.GetDocumentAsync(doc.Id);
+        var savedDoc = await _db.Store.GetDocumentAsync(doc.Id);
         Assert.NotNull(savedDoc);
         Assert.Single(savedDoc.Lines);
         Assert.Equal(250m, savedDoc.Lines[0].Total);
 
-        var balances = await _store.GetBalancesAsync();
+        var balances = await _db.Store.GetBalancesAsync();
         Assert.Equal(-150m, balances[supplier.Id]);
     }
 
@@ -70,23 +43,23 @@ public sealed class LedgerStoreSqliteTests : IDisposable
     public async Task DecimalAmounts_SurviveRoundTrip_Exactly()
     {
         var party = new Party { Name = "P" };
-        await _store.AddPartyAsync(party);
-        await _service.RecordSaleAsync(party.Id, 0.1m, paidNow: false, Now);
-        await _service.RecordSaleAsync(party.Id, 0.2m, paidNow: false, Now);
+        await _db.Store.AddPartyAsync(party);
+        await _db.Ledger.RecordSaleAsync(party.Id, 0.1m, paidNow: false, Now);
+        await _db.Ledger.RecordSaleAsync(party.Id, 0.2m, paidNow: false, Now);
 
         // decimal must not decay to double in storage: 0.1 + 0.2 == exactly 0.3
-        Assert.Equal(0.3m, await _service.GetPartyBalanceAsync(party.Id));
+        Assert.Equal(0.3m, await _db.Ledger.GetPartyBalanceAsync(party.Id));
     }
 
     [Fact]
     public async Task Parties_ArchivedAreHiddenByDefault()
     {
-        await _store.AddPartyAsync(new Party { Name = "Active" });
+        await _db.Store.AddPartyAsync(new Party { Name = "Active" });
         var archived = new Party { Name = "Old supplier", IsArchived = true };
-        await _store.AddPartyAsync(archived);
+        await _db.Store.AddPartyAsync(archived);
 
-        Assert.Single(await _store.GetPartiesAsync());
-        Assert.Equal(2, (await _store.GetPartiesAsync(includeArchived: true)).Count);
+        Assert.Single(await _db.Store.GetPartiesAsync());
+        Assert.Equal(2, (await _db.Store.GetPartiesAsync(includeArchived: true)).Count);
     }
 
     /// <summary>
@@ -104,12 +77,12 @@ public sealed class LedgerStoreSqliteTests : IDisposable
     public async Task Documents_ComeBackNewestFirst()
     {
         var supplier = new Party { Name = "Distributor A", Roles = PartyRole.Supplier };
-        await _store.AddPartyAsync(supplier);
-        await _service.RecordPurchaseAsync(supplier.Id, 10m, paidNow: false, Now.AddDays(-2));
-        await _service.RecordPurchaseAsync(supplier.Id, 20m, paidNow: false, Now);
-        await _service.RecordPurchaseAsync(supplier.Id, 30m, paidNow: false, Now.AddDays(-1));
+        await _db.Store.AddPartyAsync(supplier);
+        await _db.Ledger.RecordPurchaseAsync(supplier.Id, 10m, paidNow: false, Now.AddDays(-2));
+        await _db.Ledger.RecordPurchaseAsync(supplier.Id, 20m, paidNow: false, Now);
+        await _db.Ledger.RecordPurchaseAsync(supplier.Id, 30m, paidNow: false, Now.AddDays(-1));
 
-        var documents = await _store.GetDocumentsAsync(DocumentKind.Purchase);
+        var documents = await _db.Store.GetDocumentsAsync(DocumentKind.Purchase);
 
         Assert.Equal([Now, Now.AddDays(-1), Now.AddDays(-2)], documents.Select(d => d.OccurredAt));
     }
@@ -119,12 +92,12 @@ public sealed class LedgerStoreSqliteTests : IDisposable
     public async Task PartyEntries_ComeBackNewestFirst()
     {
         var party = new Party { Name = "Sami", Roles = PartyRole.Customer };
-        await _store.AddPartyAsync(party);
-        await _service.RecordSaleAsync(party.Id, 10m, paidNow: false, Now.AddDays(-2));
-        await _service.RecordSaleAsync(party.Id, 20m, paidNow: false, Now);
-        await _service.RecordSaleAsync(party.Id, 30m, paidNow: false, Now.AddDays(-1));
+        await _db.Store.AddPartyAsync(party);
+        await _db.Ledger.RecordSaleAsync(party.Id, 10m, paidNow: false, Now.AddDays(-2));
+        await _db.Ledger.RecordSaleAsync(party.Id, 20m, paidNow: false, Now);
+        await _db.Ledger.RecordSaleAsync(party.Id, 30m, paidNow: false, Now.AddDays(-1));
 
-        var entries = await _store.GetEntriesForPartyAsync(party.Id);
+        var entries = await _db.Store.GetEntriesForPartyAsync(party.Id);
 
         Assert.Equal([Now, Now.AddDays(-1), Now.AddDays(-2)], entries.Select(e => e.OccurredAt));
     }
@@ -138,10 +111,10 @@ public sealed class LedgerStoreSqliteTests : IDisposable
     public async Task OccurredAt_KeepsItsUtcOffset_AcrossStorage()
     {
         var party = new Party { Name = "P" };
-        await _store.AddPartyAsync(party);
-        await _service.RecordSaleAsync(party.Id, 10m, paidNow: false, Now);
+        await _db.Store.AddPartyAsync(party);
+        await _db.Ledger.RecordSaleAsync(party.Id, 10m, paidNow: false, Now);
 
-        var entry = Assert.Single(await _store.GetEntriesForPartyAsync(party.Id));
+        var entry = Assert.Single(await _db.Store.GetEntriesForPartyAsync(party.Id));
 
         Assert.Equal(TimeSpan.FromHours(3), entry.OccurredAt.Offset);
         Assert.Equal(Now, entry.OccurredAt);
@@ -151,14 +124,11 @@ public sealed class LedgerStoreSqliteTests : IDisposable
     public async Task Reopen_DatabaseFile_DataSurvives()
     {
         var party = new Party { Name = "Persistent" };
-        await _store.AddPartyAsync(party);
-        await _service.RecordPurchaseAsync(party.Id, 42m, paidNow: false, Now);
+        await _db.Store.AddPartyAsync(party);
+        await _db.Ledger.RecordPurchaseAsync(party.Id, 42m, paidNow: false, Now);
 
         // Simulate app restart: brand-new context/factory over the same file.
-        var reopenedOptions = new DbContextOptionsBuilder<OabDbContext>()
-            .UseSqlite($"Data Source={_dbPath}")
-            .Options;
-        var reopenedStore = new LedgerStore(new TestDbFactory(reopenedOptions));
+        var reopenedStore = _db.ReopenStore();
 
         Assert.Equal(-42m, await reopenedStore.GetPartyBalanceAsync(party.Id));
         Assert.Equal("Persistent", (await reopenedStore.GetPartyAsync(party.Id))?.Name);

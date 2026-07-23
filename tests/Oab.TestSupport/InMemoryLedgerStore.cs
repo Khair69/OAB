@@ -45,9 +45,13 @@ public class InMemoryLedgerStore : ILedgerStore
     public Task<Document?> GetDocumentAsync(Guid id, CancellationToken ct = default) =>
         Task.FromResult(_documents.GetValueOrDefault(id));
 
+    // Newest first, matching LedgerStore. A fake that returns a different order
+    // from the real store is a fake that lets a screen pass its tests and still
+    // be wrong — which is close to how the ORDER BY DateTimeOffset bug survived.
     public Task<IReadOnlyList<Document>> GetDocumentsAsync(DocumentKind? kind = null, Guid? partyId = null, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<Document>>(_documents.Values
             .Where(d => (kind is null || d.Kind == kind) && (partyId is null || d.PartyId == partyId))
+            .OrderByDescending(d => d.OccurredAt)
             .ToList());
 
     public Task AddEntriesAsync(IReadOnlyList<LedgerEntry> entries, CancellationToken ct = default)
@@ -57,10 +61,23 @@ public class InMemoryLedgerStore : ILedgerStore
     }
 
     public Task<IReadOnlyList<LedgerEntry>> GetEntriesForPartyAsync(Guid partyId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<LedgerEntry>>(_entries.Where(e => e.PartyId == partyId).ToList());
+        Task.FromResult<IReadOnlyList<LedgerEntry>>(_entries
+            .Where(e => e.PartyId == partyId)
+            .OrderByDescending(e => e.OccurredAt)
+            .ToList());
 
     public Task<IReadOnlyList<LedgerEntry>> GetEntriesForDocumentAsync(Guid documentId, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<LedgerEntry>>(_entries.Where(e => e.DocumentId == documentId).ToList());
+
+    public Task<IReadOnlyDictionary<Guid, IReadOnlyList<LedgerEntry>>> GetEntriesForDocumentsAsync(
+        IReadOnlyCollection<Guid> documentIds, CancellationToken ct = default)
+    {
+        var wanted = documentIds.ToHashSet();
+        return Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyList<LedgerEntry>>>(_entries
+            .Where(e => e.DocumentId is Guid id && wanted.Contains(id))
+            .GroupBy(e => e.DocumentId!.Value)
+            .ToDictionary(g => g.Key, IReadOnlyList<LedgerEntry> (g) => [.. g]));
+    }
 
     public Task<decimal> GetPartyBalanceAsync(Guid partyId, CancellationToken ct = default) =>
         Task.FromResult(_entries.Where(e => e.PartyId == partyId).Sum(e => e.Amount));

@@ -36,6 +36,19 @@ it was in where it lived. **Logic duplicated across screens is untested by
 construction.** When a rule appears twice, it belongs in Core, where a test costs
 nothing. Both of Week 1's real bugs and this one share that shape.
 
+**A fifth, from paying off the third.** The three store methods with no
+real-SQLite test all turned out to work. That is the useful outcome to plan
+around: *the rule earns its keep by making the check cheap, not by finding a bug
+every time.* A rule that only ever comes back red is a rule nobody trusts when it
+comes back green.
+
+But the same afternoon produced a new shape. The batched query written to fix the
+N+1 shipped with a comment stating, confidently and in detail, the opposite of
+what EF Core actually emits. Reading the generated SQL took two minutes and
+turned a plausible paragraph into a fact — and the fact was different.
+**Assumed behaviour and observed behaviour are as far apart as untested and
+tested.** Every lesson on this list so far has been a variation on *nobody looked*.
+
 ---
 
 ## Week 1 — Make the ledger trustworthy
@@ -125,6 +138,25 @@ key — there is no more of Week 2 that can be finished at a desk. The gating it
 is getting the app onto hardware; branding and the APK can be done in parallel
 with it, and the upgrade test needs the APK first.
 
+### The desk work that was left over
+
+Week 2 stalled on hardware, so the two standing items above got paid off instead.
+Neither is a week item; both were the highest-value thing still reachable.
+
+- [x] **Real-SQLite tests for every remaining store method.** `UpdatePartyAsync`,
+  `GetDocumentAsync`, and `GetEntriesForDocumentAsync` were the last three
+  matching the Week 1 rule — *a store method with no real-SQLite test is a guess
+  that compiles.* 24 tests later, **all three work**, and every method on
+  `ILedgerStore` has now been run against a real database. One behaviour worth
+  knowing before the party-editing screen is built: `UpdatePartyAsync` refuses to
+  create a party, so that screen needs `AddPartyAsync` for new ones. The three
+  copies of the SQLite test harness became one `SqliteTestDatabase` on the way —
+  duplicated setup rots exactly the way duplicated logic does.
+- [x] **The build prints nothing.** `EF1002`, `CS8602`, `MA002` — three
+  permanent, understood, harmless warnings on every build. Understood-and-ignored
+  is precisely the state the purchases list was in for weeks. Zero is the only
+  threshold a person can check at a glance.
+
 ## Week 3 — Fit the daily workflow, and scale
 
 - **CashDay / today screen** — money in, money out, closing position. This is
@@ -132,11 +164,23 @@ with it, and the upgrade test needs the APK first.
 - **Cut the taps.** Count taps to log a purchase; target ≤4. Recent-party
   shortcuts, remember last supplier, amount-first entry. This is the entire
   "too much work" thesis — it deserves deliberate design.
-- **Fix the N+1 query** in `PurchasesListViewModel.LoadAsync`, which calls
-  `GetEntriesForDocumentAsync` once per purchase inside the loop. Fine at 10
-  purchases, painful at 2,000.
+- [x] **Fix the N+1 query** in `PurchasesListViewModel.LoadAsync`, which called
+  `GetEntriesForDocumentAsync` once per purchase inside the loop — one round trip
+  per row, on every `OnAppearing`. Now one `GetEntriesForDocumentsAsync` for the
+  whole page: three queries to draw the screen, whatever the row count. Done
+  early because the SQLite harness from the item above made it testable, and
+  because it is the one Week 3 item that needs no design work.
+  *What it taught:* the obvious `ids.Contains(...)` compiles to one SQL parameter
+  per id, which is its own ceiling. `EF.Parameter` sends the list as a single
+  JSON parameter. Found by reading the SQL after writing a comment that claimed
+  otherwise.
 - **Seed 5,000 entries / 300 parties** and measure list load on a low-end
   device. Add search and archiving of settled items so lists stay short.
+  *Now the gating item for scale:* with the N+1 gone, the next suspect is
+  `GetBalancesAsync` reading the whole ledger on every list load, and there is no
+  way to know whether that actually hurts without realistic data on a real
+  phone. `Party.IsArchived` is fully implemented and tested — archiving is a
+  screen away, not a feature away.
 
 ## Week 4 — Prove the customization thesis, then pilot
 

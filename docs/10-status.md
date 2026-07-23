@@ -4,7 +4,7 @@
 
 ---
 
-An honest inventory of what exists, as of the shared amount-parser change
+An honest inventory of what exists, as of the store-coverage and N+1 change
 (2026-07-23). This is the document to read before deciding what to build next;
 the schedule for doing so is [`ROADMAP.md`](ROADMAP.md).
 
@@ -33,6 +33,9 @@ the schedule for doing so is [`ROADMAP.md`](ROADMAP.md).
 | Module system + per-shop composition | ✅ Complete (one head exists) | `IOabModule`, `UseOab` |
 | **Global exception handling — every handler funnelled, every crash logged** | ✅ Complete | `Oab.App/Diagnostics` |
 | **Shareable error log** | ✅ Complete | `ErrorLog`, backup screen card |
+| **Every `ILedgerStore` method run against real SQLite** | ✅ Complete | `tests/Oab.Data.Tests` |
+| **Purchases list loads in a fixed number of queries** | ✅ Complete | `GetEntriesForDocumentsAsync` |
+| **Zero-warning build** | ✅ Complete | D25 |
 | Editing a party (phone, note, archive) | ❌ No screen | see §3 |
 | Document line items in the UI | ❌ Engine only | see §3 |
 | Sales module (cash sales, receipts) | ❌ Not built | — |
@@ -72,11 +75,20 @@ installed, the purchases list and the party statement threw
 The engine is ahead of the app. These have no screen calling them — the cheapest
 features to ship, because the hard half is already written.
 
-> **Read "tested" narrowly here.** `UpdatePartyAsync`, `GetDocumentAsync`, and
-> `GetEntriesForDocumentAsync` have no test against real SQLite. `GetDocumentsAsync`
-> did not either, and it threw on every call for as long as it has existed (§4).
-> Treat an untested store method as unwritten until something has run it against
-> a real database.
+> **This warning used to say "read tested narrowly".** `UpdatePartyAsync`,
+> `GetDocumentAsync`, and `GetEntriesForDocumentAsync` were the three
+> `ILedgerStore` methods with no test against real SQLite — the same description
+> `GetDocumentsAsync` matched right up until it turned out to have thrown on
+> every call it had ever received (§4).
+>
+> All three now have one, in `PartyEditingSqliteTests` and
+> `DocumentLookupSqliteTests`, and **all three work.** Every method on
+> `ILedgerStore` has now been run against a real database. The rows below are
+> "no screen calls this", not "nobody knows if this works".
+>
+> One behaviour worth knowing before building on it: `UpdatePartyAsync` will
+> **not** create a party — EF raises a concurrency failure instead of inserting.
+> A party-editing screen needs `AddPartyAsync` for the new ones.
 
 | Capability | Implemented in | Called by the app? |
 |---|---|---|
@@ -226,14 +238,22 @@ The `ORDER BY DateTimeOffset` bug is the argument for taking this seriously:
 loaded. When the phone test happens, **read `errors.log` afterwards** — that is
 now the difference between "it seemed fine" and knowing.
 
-### 🟡 N+1 query in the purchases list
+### ✅ Closed — N+1 query in the purchases list
 
-`PurchasesListViewModel.LoadAsync` (`:48`) calls `GetEntriesForDocumentAsync`
-**once per document inside the loop**. Fine at 10 purchases; painful at 2,000, on
-a low-end phone, on every `OnAppearing`.
+`PurchasesListViewModel.LoadAsync` called `GetEntriesForDocumentAsync` **once per
+document inside the loop** — one round trip per row, on every `OnAppearing`.
+Fine at 10 purchases; 2,000 queries to draw one screen at two thousand.
 
-*Fix:* one query for all entries whose `DocumentId` is in the page's set, grouped
-in memory — the same shape `GetBalancesAsync` already uses.
+Closed by `ILedgerStore.GetEntriesForDocumentsAsync`: one query for every
+invoice on the page, grouped in memory, keyed by id — the shape
+`GetBalancesAsync` already had. The screen is now three queries regardless of
+how many rows it draws. Reasoning in D24, SQL in
+[03 §4.2](03-data-layer.md#42-asking-about-many-invoices-at-once).
+
+Worth knowing for the next such query: written the obvious way, EF sends **one
+SQL parameter per id**, which is a ceiling waiting for a shop to grow into it.
+`EF.Parameter` makes it one JSON parameter instead. This was found by reading the
+generated SQL — the method's first comment confidently described the opposite.
 
 ### 🟡 `GetBalancesAsync` reads the entire ledger
 
@@ -255,20 +275,18 @@ splash, no version scheme, and `INTERNET` + `ACCESS_NETWORK_STATE` permissions
 still declared in `AndroidManifest.xml` for an app that makes no network calls.
 Full list: [08 §8](08-build-test-release.md#8-release--what-is-missing).
 
+### ✅ Closed — the build printed three permanent warnings
+
+`EF1002` on `Oab.Data`, `CS8602` on `Oab.Modules.Purchases`, and `MA002` on
+`Oab.App.Tests`. All understood, all harmless, all printed on every build —
+which is the problem. `dotnet build OAB.slnx` now reports **0 warnings, 0
+errors**, so a new one is visible without anyone having to remember which three
+were expected. `CS8602` was restructured away rather than suppressed; `MA002`
+was fixed by referencing `Microsoft.Maui.Controls` explicitly; only `EF1002` is
+suppressed, at one statement, with the reasoning inline. D25.
+
 ### 🟢 Minor
 
-- **`EF1002` warning** on every build of `Oab.Data`
-  ([`DatabaseBackupService.cs:29`](../src/Oab.Data/Backup/DatabaseBackupService.cs)).
-  Expected and safe — `VACUUM INTO` cannot be parameterised and the path is
-  escaped — but it should be suppressed with a `#pragma` and a comment so it
-  stops being noise that trains people to ignore warnings.
-- **`CS8602` warning** on every build of `Oab.Modules.Purchases`
-  ([`NewPurchaseViewModel.cs:87`](../src/Oab.Modules/Oab.Modules.Purchases/NewPurchaseViewModel.cs)).
-  `supplier` is provably non-null by then — `SaveAsync` returns early when it is
-  null and no name was typed — but the flow-analysis cannot see it across the two
-  `if`s. Harmless, and it predates the amount-parser change; noted so it is not
-  mistaken for a regression. Same treatment as `EF1002`: restructure or suppress
-  with a comment, so the build has no warnings anyone has learned to ignore.
 - **Dead scaffolding** in the customer template: `Platforms/iOS/`,
   `Platforms/MacCatalyst/`, and `Resources/Images/dotnet_bot.png` are all
   committed but unused. (`.vs/` and `*.csproj.user` exist on disk but are
@@ -321,26 +339,41 @@ Derived from the sections above, weighted by damage prevented per hour spent:
    `NotSupportedException` on two screens.
 3. ~~**Arabic-Indic digit input**~~ — done: `MoneyInput` in Core, 35 tests, four
    call sites replaced and their private copies deleted.
-4. **Run on a real Android phone in Arabic** — may invalidate assumptions. The
+4. ~~**Real-SQLite tests for the three untested store methods**~~ — done, along
+   with the N+1 fix in the same area and the last three build warnings. All three
+   methods work; see §3.
+5. **Run on a real Android phone in Arabic** — may invalidate assumptions. The
    correction flow's three stacked dialogs are the first thing to watch a real
    person get through. **Read `errors.log` afterwards**, whether or not anything
    looked wrong.
-5. **Restore onto a second device** — closes the existential risk.
-6. **Upgrade test with real data.**
-7. **Release engineering** — app id, icon, keystore, permissions.
-8. Then the roadmap's Week 3–4 items: CashDay, tap-count reduction, the N+1 fix,
+6. **Restore onto a second device** — closes the existential risk.
+7. **Upgrade test with real data.**
+8. **Release engineering** — app id, icon, keystore, permissions.
+9. Then the roadmap's remaining Week 3–4 items: CashDay, tap-count reduction,
    scale testing, second shop, pilot.
+
+Steps 5–8 all need a physical phone or a signing key. **There is nothing left in
+this list that can be finished at a desk** — which is itself the finding, and the
+argument for stopping code work until the app has been on hardware.
 
 **A standing item, promoted by what step 2 found:** any `ILedgerStore` method
 without a test against real SQLite should be treated as untested code, not as
-working code. Three exist today — `UpdatePartyAsync`, `GetDocumentAsync`, and
-`GetEntriesForDocumentAsync` — and the first two have no caller either (§3).
+working code. As of step 4 there are none — every method has been run against a
+real database. The item stays because the *next* method added is what it is for.
 
 **A second standing item, from step 3:** the same logic copied into four screens
 is untested by construction — nobody writes a test for a private method in a
 page's code-behind. When a rule shows up twice, it belongs in Core, where the
 tests are cheap. Steps 2 and 3 both closed bugs whose real cause was *where the
-code lived*, not what it said.
+code lived*, not what it said. Step 4 applied the same rule to test scaffolding:
+three copies of the SQLite harness became one `SqliteTestDatabase`, on the
+grounds that duplicated setup rots exactly the way duplicated logic does.
+
+**A third, from step 4:** *assumed* behaviour and *observed* behaviour are as far
+apart as untested and tested. The batched query shipped with a comment asserting
+something EF Core does not do; the fix was to read the generated SQL, which took
+two minutes. When a line's correctness depends on what a framework emits, look at
+what it emits.
 
 ---
 

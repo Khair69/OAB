@@ -127,12 +127,12 @@ dotnet format
 
 ## 4. Test inventory
 
-**152 tests, all passing** (verified by running all three suites).
+**176 tests, all passing** (verified by running all three suites).
 
 | Suite | Target | Tests | Runs in CI | Covers |
 |---|---|---:|---|---|
 | [`Oab.Core.Tests`](../tests/Oab.Core.Tests) | `net10.0` | **77** | ✅ | Ledger math incl. correction arithmetic, `LedgerService`, money formatting **and parsing**, summary report |
-| [`Oab.Data.Tests`](../tests/Oab.Data.Tests) | `net10.0` | **16** | ✅ | Real SQLite + real migrations, decimal fidelity, newest-first ordering, role filtering, backup/restore |
+| [`Oab.Data.Tests`](../tests/Oab.Data.Tests) | `net10.0` | **40** | ✅ | Real SQLite + real migrations, decimal fidelity, newest-first ordering, role filtering, backup/restore, **party editing and archiving, document/line lookup, the batched invoice read** |
 | [`Oab.App.Tests`](../tests/Oab.App.Tests) | `net10.0-windows10.0.19041.0` | **59** | ❌ (needs the MAUI workload) | View models: balance→text/colour, role filtering, pay-remaining, statement running balance, the correction flow, backup summary; plus the error log |
 
 ### `Oab.App.Tests` breakdown
@@ -161,6 +161,16 @@ is "which of a dozen Unicode characters did the keyboard emit", each case costs
 one line, and the alternative was four untested copies in page code-behind
 (D23).
 
+### `Oab.Data.Tests` breakdown
+
+| File | Tests | Focus |
+|---|---:|---|
+| `DocumentLookupSqliteTests` | 13 | One document with its lines (decimal quantities, `Number`, offset, empty-not-null, no leakage between invoices); the entries behind an invoice (outstanding falling, standalone payments ignored, **a correction moving the invoice's remainder**, correcting to zero, a cash purchase settled on arrival); and the batched read agreeing with the single read, omitting empty documents, and surviving 1,500 ids |
+| `PartyEditingSqliteTests` | 7 | Editing a detached party without duplicating it, `[Flags]` roles surviving, **archiving hiding the party while keeping its balance and history**, un-archiving, edits surviving a restart, and `Update` refusing to insert an unknown party |
+| `DatabaseBackupTests` | 6 | Snapshot → damage → restore; the `.pre-restore` copy; junk, missing, and foreign-schema files rejected |
+| `LedgerStoreSqliteTests` | 7 | Purchase→payment persisted and balanced, exact decimal round-trip, archived parties hidden, newest-first ordering, `OccurredAt` offset, reopen-the-file durability |
+| `PartyRoleFilterTests` | 3 | Supplier/customer separation and the legacy `None`-shows-everywhere rule |
+
 `ErrorLogTests` and `Oab.Data.Tests` both write real files into the temp
 directory. That is deliberate in both cases: the value of `ErrorLog` is what it
 does when the file system misbehaves, and a fake file system would only prove the
@@ -168,10 +178,20 @@ fake works.
 
 ### Shared test infrastructure
 
+- [`tests/Oab.Data.Tests/SqliteTestDatabase.cs`](../tests/Oab.Data.Tests/SqliteTestDatabase.cs)
+  — a temp directory, a database file with the **real migrations applied**, a
+  `LedgerStore` and `LedgerService` over it, `ReopenStore()` for simulating an app
+  restart, `PathTo()` for backup targets, and disposal that clears SQLite's
+  connection pools first so Windows will let the file go. It lives here rather
+  than in `Oab.TestSupport` because that project deliberately references only
+  `Oab.Core`. Three test classes carried their own copy of this before; the copy
+  in the file you are not looking at is the one that goes stale.
 - [`tests/Oab.TestSupport/InMemoryLedgerStore.cs`](../tests/Oab.TestSupport/InMemoryLedgerStore.cs)
   — a full `ILedgerStore` over dictionaries and a list. Shared by `Oab.Core.Tests`
   and `Oab.App.Tests`. It implements the same role-filter rule as the SQLite
-  store, including "`None` matches everything".
+  store, including "`None` matches everything", and now the **same newest-first
+  ordering** — a fake that returns a different order from the real store lets a
+  screen pass its tests and still show a shopkeeper their entries backwards.
 - [`tests/Oab.App.Tests/TestInfrastructure.cs`](../tests/Oab.App.Tests/TestInfrastructure.cs)
   — `FakePreferences` (an in-memory `IPreferences`, so localization needs no
   device) and `VmContext`, which assembles the **real** dependency graph a module
@@ -212,9 +232,27 @@ close that gap at the cost of a much slower pipeline.
 
 ## 6. Known build output
 
-| Warning | Where | Status |
+```
+dotnet build OAB.slnx
+    0 Warning(s)
+    0 Error(s)
+```
+
+**Zero is the expected number, and the reason is not tidiness.** Three warnings
+used to print on every build. All three were understood and harmless, which is
+exactly what makes them dangerous: a build whose output is always the same noise
+is a build nobody reads, and this project has already lost two working screens to
+a problem the tools were reporting to an empty room (D21, D22). A fourth warning
+appearing among three permanent ones is invisible; appearing alone it is obvious.
+
+| Was | Where | Resolution |
 |---|---|---|
-| `EF1002: ExecuteSqlRawAsync inserts interpolated strings directly into the SQL` | [`DatabaseBackupService.cs:29`](../src/Oab.Data/Backup/DatabaseBackupService.cs) | **Expected.** `VACUUM INTO` cannot take a parameter; the path is single-quote-escaped before interpolation and originates from app code, not user input. Worth an explicit `#pragma warning disable EF1002` with a comment so it stops being noise. |
+| `EF1002: ExecuteSqlRawAsync inserts interpolated strings directly into the SQL` | [`DatabaseBackupService.cs`](../src/Oab.Data/Backup/DatabaseBackupService.cs) | **Suppressed** at that one statement with `#pragma` and the reasoning inline: `VACUUM INTO` cannot take a parameter, and the path is app-originated and single-quote-escaped (D11). |
+| `CS8602: Dereference of a possibly null reference` | [`NewPurchaseViewModel.cs`](../src/Oab.Modules/Oab.Modules.Purchases/NewPurchaseViewModel.cs) | **Restructured, not suppressed.** The supplier is now chosen in one expression above the `try`, so the compiler can see what the reader could. |
+| `MA002: UseMaui no longer implies Microsoft.Maui.Controls` | [`Oab.App.Tests.csproj`](../tests/Oab.App.Tests/Oab.App.Tests.csproj) | **Fixed.** The package is referenced explicitly on `$(MauiVersion)` instead of arriving transitively through `Oab.App`. |
+
+If you add a suppression, put the reason next to it. A `#pragma` without a
+sentence is how the next person ends up re-deciding this from scratch.
 
 The MSBuild message about `MauiXamlInflator=SourceGen` on every MAUI project is
 informational — XAML is compiled at build time rather than inflated at runtime.

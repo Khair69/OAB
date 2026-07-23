@@ -26,7 +26,15 @@ public class DatabaseBackupService(
         // still holds the database open — safer than File.Copy, which can catch
         // a half-written page or miss the journal.
         var quoted = destinationPath.Replace("'", "''", StringComparison.Ordinal);
+        // Raw SQL, deliberately. VACUUM INTO's target cannot be a parameter, so
+        // there is no ExecuteSqlAsync form of it. The one interpolated value is a
+        // path this app chose (the share-sheet cache or the app data directory),
+        // single-quote escaped above — never user text. Suppressed at the line
+        // rather than left to print on every build: a build that always says
+        // something teaches everyone to skim past the time it says something new.
+#pragma warning disable EF1002
         await db.Database.ExecuteSqlRawAsync($"VACUUM INTO '{quoted}'", ct);
+#pragma warning restore EF1002
         return destinationPath;
     }
 

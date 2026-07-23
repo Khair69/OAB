@@ -101,6 +101,31 @@ public class LedgerStore(IDbContextFactory<OabDbContext> contextFactory) : ILedg
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<LedgerEntry>>> GetEntriesForDocumentsAsync(
+        IReadOnlyCollection<Guid> documentIds, CancellationToken ct = default)
+    {
+        if (documentIds.Count == 0)
+            return new Dictionary<Guid, IReadOnlyList<LedgerEntry>>();
+
+        await using var db = await contextFactory.CreateDbContextAsync(ct);
+        var ids = documentIds as IList<Guid> ?? [.. documentIds];
+        // EF.Parameter is load-bearing, not decoration. Written as a plain
+        // ids.Contains(...) this compiles to IN (@ids1, @ids2, ... @idsN) — one
+        // SQL parameter per invoice, which is a ceiling waiting for the shop that
+        // grows into it. EF.Parameter sends the whole list as a single JSON
+        // parameter and expands it with json_each:
+        //     WHERE DocumentId IN (SELECT value FROM json_each(@ids))
+        // One parameter, any number of invoices. Verified by reading the
+        // generated SQL, not assumed — the plain form's shape was a surprise.
+        var entries = await db.LedgerEntries.AsNoTracking()
+            .Where(e => e.DocumentId.HasValue && EF.Parameter(ids).Contains(e.DocumentId.Value))
+            .ToListAsync(ct);
+
+        return entries
+            .GroupBy(e => e.DocumentId!.Value)
+            .ToDictionary(g => g.Key, IReadOnlyList<LedgerEntry> (g) => [.. g]);
+    }
+
     public async Task<decimal> GetPartyBalanceAsync(Guid partyId, CancellationToken ct = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(ct);

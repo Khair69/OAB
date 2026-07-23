@@ -19,6 +19,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- UseMaui no longer implies this package (MA002). It arrived transitively
+         through Oab.App and the project built anyway, but the warning printed on
+         every build of the solution — and build noise is how a real warning gets
+         skipped. Stated explicitly, on the same $(MauiVersion) as every other
+         head. -->
+    <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="$(TestSdkVersion)" />
     <PackageReference Include="xunit" Version="$(XunitVersion)" />
     <PackageReference Include="xunit.runner.visualstudio" Version="$(XunitRunnerVersion)" />

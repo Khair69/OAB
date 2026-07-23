@@ -95,7 +95,19 @@ CI, since the MAUI tests need the Windows MAUI workload.
 **Every new `ILedgerStore` method needs a test in `Oab.Data.Tests`, not only in
 `Oab.App.Tests`.** The in-memory store runs LINQ-to-Objects and will pass queries
 the SQLite provider refuses to translate — that gap hid a `NotSupportedException`
-on two shipped screens until the global exception handler surfaced it.
+on two shipped screens until the global exception handler surfaced it. Every
+method on the interface has one now; `SqliteTestDatabase` makes adding the next
+three lines long. Give the in-memory store the same semantics too, ordering
+included.
+
+**A list screen queries once, not once per row.** `GetBalancesAsync` and
+`GetEntriesForDocumentsAsync` both return a dictionary keyed by id for exactly
+this reason. A query inside a `foreach` is fine at ten rows and is 2,000 round
+trips at two thousand, on every screen open.
+
+**The build has zero warnings, on purpose.** If you add one, fix it or suppress
+it at the line with the reason written next to it. Three permanent warnings is
+how a fourth one goes unnoticed.
 
 **Parse typed amounts with `MoneyInput.TryParseAmount`, never `decimal.TryParse`.**
 The app renders Arabic-Indic digits, and .NET's `ar` uses `٫` and `٬` as its
@@ -200,7 +212,8 @@ tests/                اختبارات محرك الحسابات وطبقة ال
 ### ليس في النسخة الأولى (عن قصد)
 
 المزامنة بين الأجهزة، السحابة، طباعة الفواتير، قارئ الباركود، التقارير
-المتقدمة. النسخ الاحتياطي حاليًا = تصدير ملف قاعدة البيانات (مخطط له كوحدة
-صغيرة).
+المتقدمة. أما النسخ الاحتياطي فقد أصبح وحدة جاهزة (`BackupModule`): تصدير ملف
+قاعدة البيانات مع ملخّص نصّي مقروء عبر قائمة المشاركة، واستعادة مع تحقّق من
+سلامة الملف ونسخة أمان قبل الاستبدال.
 
 </div>

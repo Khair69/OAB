@@ -55,7 +55,8 @@ no internet required, ever.
 | **Platform** | .NET 10 · .NET MAUI · Android (primary) + Windows (desk testing) |
 | **Storage** | SQLite via EF Core 10.0.9, one file per shop, on-device only |
 | **MVVM** | CommunityToolkit.Mvvm 8.4.2 |
-| **Tests** | xUnit — **152 tests, all passing** (77 core · 16 data · 59 view-model + error log) |
+| **Tests** | xUnit — **176 tests, all passing** (77 core · 40 data · 59 view-model + error log) |
+| **Build output** | 0 warnings, 0 errors — deliberately, see [09 D25](09-decisions.md#d25--the-build-prints-nothing) |
 | **Solution projects** | 3 libraries + 4 feature modules + 1 customer head + 4 test projects |
 | **Migrations** | 2 (`InitialCreate`, `AddPartyRoles`) |
 | **Localized strings** | 81 keys × 2 languages (English, Arabic) |
@@ -102,3 +103,12 @@ construction — that is how four amount parsers came to exist, none of which co
 read the digits the app itself prints ([09 D23](09-decisions.md#d23--one-amount-parser-in-core-mapping-separators-per-culture)).
 When a rule appears twice, it belongs in `Oab.Core`, where it has no dependencies
 and a test costs one line.
+
+### And one more, learned last
+
+**Read the SQL, don't assume it.** The batched invoice query shipped with a
+comment describing, in confident detail, the opposite of what EF Core actually
+emits; checking took two minutes
+([09 D24](09-decisions.md#d24--a-list-screen-asks-one-question-per-screen-not-one-per-row)).
+Everything on this page is a variation on the same failure — *nobody looked* —
+and the cure has been the same every time: make looking cheap, then look.

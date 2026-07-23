@@ -41,11 +41,18 @@ public partial class PurchasesListViewModel(
             var documents = await store.GetDocumentsAsync(DocumentKind.Purchase);
             var parties = (await store.GetPartiesAsync(includeArchived: true))
                 .ToDictionary(p => p.Id, p => p.Name);
+            // Three queries for the whole screen, not three plus one per row.
+            // This loop used to ask the database about each invoice separately:
+            // fine at ten purchases, 2,000 round trips at two thousand — on every
+            // OnAppearing, on a cheap phone. Archived parties are still fetched
+            // by name so a settled supplier's old invoices don't render as "?".
+            var entriesByDocument = await store.GetEntriesForDocumentsAsync(
+                [.. documents.Select(d => d.Id)]);
 
             Purchases.Clear();
             foreach (var doc in documents)
             {
-                var entries = await store.GetEntriesForDocumentAsync(doc.Id);
+                var entries = entriesByDocument.GetValueOrDefault(doc.Id, []);
                 var total = Math.Abs(entries.Where(e => e.Kind == EntryKind.Purchase).Sum(e => e.Amount));
                 var outstanding = LedgerMath.Outstanding(entries);
                 var isUnpaid = outstanding > 0m;

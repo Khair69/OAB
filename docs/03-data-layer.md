@@ -154,7 +154,7 @@ Every read uses `AsNoTracking()` — nothing in the app mutates a loaded entity.
 | Method | Implementation notes |
 |---|---|
 | `AddPartyAsync` | Simple insert. |
-| `UpdatePartyAsync` | `db.Parties.Update` + save. **No caller in the app today.** |
+| `UpdatePartyAsync` | `db.Parties.Update` + save. **Still no caller in the app** — but no longer untested; see the note below. |
 | `GetPartyAsync` | By id, no tracking. |
 | `GetPartiesAsync` | `WHERE includeArchived OR NOT IsArchived`, `ORDER BY Name`, **then role filtering in memory**. |
 | `AddDocumentAsync` | Inserts the document with its lines in one save. |
@@ -163,8 +163,16 @@ Every read uses `AsNoTracking()` — nothing in the app mutates a loaded entity.
 | `AddEntriesAsync` | `AddRange` + one `SaveChangesAsync` — both entries of a cash purchase land in a single transaction. |
 | `GetEntriesForPartyAsync` | `WHERE PartyId = …`, then **ordered newest-first in C#**. (Consumers that need a running balance re-sort ascending themselves — see [04 §10](04-app-shell.md#10-party-statement--shared-detail-screen).) |
 | `GetEntriesForDocumentAsync` | Unordered — callers only sum. |
+| `GetEntriesForDocumentsAsync` | The same question for many invoices at once, keyed by document id. One `IN` query; see §4.2. Documents with nothing against them are absent, so callers use `GetValueOrDefault(id, [])`. |
 | `GetPartyBalanceAsync` | `SELECT Amount WHERE PartyId = …` then `.Sum()` **in C#**. |
 | `GetBalancesAsync` | `SELECT PartyId, Amount` for the whole table, then `GroupBy`/`Sum` in C#. Returns a dictionary; parties with no entries are simply absent, so callers use `GetValueOrDefault`. |
+
+> **`UpdatePartyAsync` will not create a party.** EF's `Update` on an entity the
+> database has never seen is an `UPDATE` matching no rows, which surfaces as a
+> `DbUpdateConcurrencyException` rather than an insert. That matters for the
+> party-editing screen that does not exist yet: it must call `AddPartyAsync` for
+> new parties and this only for existing ones. Pinned by
+> `PartyEditingSqliteTests.Updating_APartyThatWasNeverAdded_Throws_RatherThanInsertingIt`.
 
 ### Client-side evaluation, and why
 
@@ -205,6 +213,45 @@ serves the ordering, but it still serves the filter.
 `GetBalancesAsync` reading the entire `LedgerEntries` table is the one that will
 need attention first at scale; see
 [10 — Status §4](10-status.md#4-known-gaps-and-risks).
+
+### 4.2 Asking about many invoices at once
+
+`GetEntriesForDocumentsAsync` exists because the purchases list needs *"is each
+of these invoices paid?"* for every row on screen, and the obvious way to get
+that — call `GetEntriesForDocumentAsync` inside the loop — is one round trip per
+row. Fine at ten purchases; 2,000 round trips at two thousand, on every
+`OnAppearing`, on a cheap phone. It is the same shape as `GetBalancesAsync`: one
+query, grouped in memory, keyed by id.
+
+The one non-obvious line is `EF.Parameter`:
+
+```csharp
+.Where(e => e.DocumentId.HasValue && EF.Parameter(ids).Contains(e.DocumentId.Value))
+```
+
+Written as a plain `ids.Contains(...)`, EF Core emits **one SQL parameter per
+id**:
+
+```sql
+WHERE "DocumentId" IS NOT NULL AND "DocumentId" IN (@ids1, @ids2, @ids3)
+```
+
+That is a ceiling with a growing shop pointed at it — SQLite's historical
+variable limit is 999. `EF.Parameter` forces the collection to travel as a single
+JSON parameter, expanded server-side:
+
+```sql
+WHERE "DocumentId" IS NOT NULL AND "DocumentId" IN (SELECT "value" FROM json_each(@ids))
+```
+
+One parameter, any number of invoices. Both shapes above were read off the
+generated SQL rather than assumed — the plain form's translation was a surprise,
+and the first version of this method shipped a comment claiming the opposite.
+Pinned by
+`DocumentLookupSqliteTests.BatchedEntries_HandleMoreDocumentsThanSqliteAllowsParameters`,
+which seeds 1,500 documents specifically to be past the old limit, and by
+`BatchedEntries_MatchAskingOneDocumentAtATime`, which is the assertion that makes
+it a safe replacement rather than a faster wrong answer.
 
 ## 5. Registration — [`OabDataServiceCollectionExtensions.cs`](../src/Oab.Data/OabDataServiceCollectionExtensions.cs)
 
@@ -271,9 +318,11 @@ Files: [`IDatabaseBackup.cs`](../src/Oab.Data/Backup/IDatabaseBackup.cs),
 **consistent, defragmented copy while the app still holds the database open**.
 A raw file copy can catch a half-written page or miss the journal, producing a
 backup that is silently corrupt — the worst possible failure mode for this
-feature. The destination path is single-quote-escaped before interpolation
-(the statement cannot be parameterised; see
-[10 §4](10-status.md#4-known-gaps-and-risks) for the resulting EF1002 warning).
+feature. The destination path is single-quote-escaped before interpolation:
+`VACUUM INTO` cannot take a parameter, so there is no `ExecuteSqlAsync` form of
+it. The resulting `EF1002` is suppressed at that one statement with a `#pragma`
+and the reasoning inline — a warning printed on every build is how a real one
+gets skipped.
 
 ### `IsValidBackupAsync(candidatePath)`
 
@@ -319,7 +368,7 @@ and reopen (`Backup_RestoreDone`).
 
 ## 8. Test coverage
 
-[`tests/Oab.Data.Tests`](../tests/Oab.Data.Tests) — **16 tests, all passing.**
+[`tests/Oab.Data.Tests`](../tests/Oab.Data.Tests) — **40 tests, all passing.**
 Every one runs against a **real SQLite file in the temp directory with the real
 migrations applied**; there is no in-memory EF provider anywhere in this suite,
 because an in-memory provider would not have caught the decimal-storage issue or
@@ -327,7 +376,10 @@ the WAL-sidecar issue.
 
 | File | Covers |
 |---|---|
+| [`SqliteTestDatabase`](../tests/Oab.Data.Tests/SqliteTestDatabase.cs) | Not a test — the harness. A temp directory, a migrated database file, a `LedgerStore` and a `LedgerService` over it, `ReopenStore()` for restart simulation, and pool-clearing disposal. One copy of what used to be three. |
 | `LedgerStoreSqliteTests` | Full purchase→payment flow persisted and balanced; exact decimal round-trip; archived parties hidden by default; **documents and party entries come back newest-first** and `OccurredAt` keeps its UTC offset; **data survives reopening the file** (simulated app restart) |
+| `PartyEditingSqliteTests` | Name/phone/note round-trip through a detached entity; no duplicate row; `[Flags]` roles surviving an edit; **archiving hides the party and keeps the balance and history**; un-archiving; edits surviving a restart; `Update` on an unknown party throwing rather than inserting |
+| `DocumentLookupSqliteTests` | A document coming back with every line, exact decimal quantities and prices, its `Number`/`Note`/offset, empty-not-null lines, an unknown id being `null`, and lines not leaking between invoices. Then the entries side: outstanding falling as payments land; **standalone payments and other invoices ignored**; **a correction moving the invoice's remainder, not just the party balance**; correcting to zero; a cash purchase settled on arrival; and the batched read (§4.2) agreeing with the one-at-a-time read, omitting empty documents, and surviving 1,500 ids |
 | `PartyRoleFilterTests` | Supplier/customer separation; a party with both roles appearing in both lists; the legacy `None`-shows-everywhere rule |
 | `DatabaseBackupTests` | Snapshot → damage → restore recovers the exact book; `.pre-restore` copy exists and is itself valid; snapshot overwrites a stale file; a junk file is rejected and restore refuses it; a missing file is rejected; **a real but foreign SQLite database is rejected** |
 
@@ -335,6 +387,14 @@ The three ordering tests were added *after* the bug they describe reached a
 running app. The lesson is narrower than "write more tests": **a store method
 with no test against real SQLite is a store method that has never run** — the
 in-memory fake will happily pass anything the LINQ provider would reject.
+
+`PartyEditingSqliteTests` and `DocumentLookupSqliteTests` are that rule being
+paid off rather than re-learned: `UpdatePartyAsync`, `GetDocumentAsync`, and
+`GetEntriesForDocumentAsync` were the three methods still matching its
+description. **All three turned out to work.** That is worth stating plainly —
+the rule earns its keep by making the check cheap, not by being right every time,
+and a rule that only ever finds bugs would be a rule nobody could trust when it
+came back clean.
 
 `DatabaseBackupTests.Snapshot_ThenRestore_PreservesTheWholeBook` is the test
 that encodes the product promise: record 250 on credit and a 100 payment, take a

@@ -446,6 +446,13 @@ close to free anyway — the `WHERE` still runs server-side, so what gets sorted
 one shop's purchases or one party's entries, never the table. Same family as D6:
 SQLite's type system is thin, and the price is paid in C#.
 
+**Amendment.** `InMemoryLedgerStore` now sorts newest-first too. It did not, so
+the fake and the real store disagreed about the order of the two reads this entry
+is about — a screen could pass every view-model test and still show a shopkeeper
+their entries backwards. A fake that behaves differently from the thing it stands
+in for is not a cheap test double; it is a second implementation nobody is
+checking.
+
 ---
 
 ## D23 — One amount parser, in Core, mapping separators per-culture
@@ -498,6 +505,77 @@ Duplication is how a codebase hides the fact that something is untested.
 
 ---
 
+## D24 — A list screen asks one question per screen, not one per row
+
+**Context.** `PurchasesListViewModel.LoadAsync` called
+`GetEntriesForDocumentAsync` **inside** its loop, to answer "is this invoice
+paid?" for each row. Correct, readable, and one database round trip per purchase
+— on every `OnAppearing`, on a cheap phone. At ten purchases nobody notices; at
+two thousand it is two thousand queries to draw one screen.
+
+**Decision.** `ILedgerStore.GetEntriesForDocumentsAsync(ids)` — one query,
+grouped in memory, keyed by document id. The list is now three queries regardless
+of how many rows it draws.
+
+**Why it lives on the store and not in the view model.** The view model cannot
+issue one query for many ids; only the store can. And this is the same shape
+`GetBalancesAsync` already has for the supplier and customer lists — *the list
+screen's question is a dictionary keyed by id*, not a loop. Making the third list
+match the other two is worth more than the queries saved.
+
+**The non-obvious line.** `EF.Parameter(ids).Contains(...)` rather than
+`ids.Contains(...)`. The plain form compiles to `IN (@ids1, @ids2, … @idsN)` —
+one SQL parameter per invoice, aimed straight at SQLite's variable ceiling.
+`EF.Parameter` sends the list as a single JSON parameter expanded by `json_each`.
+Full SQL for both in [03 §4.2](03-data-layer.md#42-asking-about-many-invoices-at-once).
+
+**How that was found.** By reading the generated SQL. The first version of this
+method shipped a confident comment asserting the *opposite* of what EF actually
+emitted — the batching was assumed, not observed. Two entries above this one
+(D22, D23) are about code that was never run; this is about code that was run and
+described wrongly, which is the same failure wearing better clothes. The 1,500-id
+test exists so the claim has something behind it other than a paragraph.
+
+**Cost.** One more method on `ILedgerStore`, which is the interface D1 keeps
+deliberately narrow, plus its `InMemoryLedgerStore` twin. `GetEntriesForDocumentAsync`
+stays — `GetDocumentOutstandingAsync` asks about exactly one invoice and should
+not have to build a collection to do it.
+
+**Still open.** `GetBalancesAsync` reading the whole `LedgerEntries` table (D6) is
+untouched, and remains the first thing to profile once there is seeded data to
+profile against.
+
+---
+
+## D25 — The build prints nothing
+
+**Context.** Three warnings printed on every build: `EF1002` on the backup
+service, `CS8602` in `NewPurchaseViewModel`, and `MA002` on the MAUI test
+project. All three were understood, harmless, and permanent.
+
+**Decision.** Fix or suppress all three, and treat a clean build as the baseline.
+
+- **`CS8602`** — restructured. The supplier is now chosen in one expression above
+  the `try`, so "not null past this check" is something the compiler can see and
+  not just something the reader can. No suppression.
+- **`EF1002`** — suppressed with `#pragma` at the single statement, with the
+  reasoning inline (D11: `VACUUM INTO` cannot be parameterised).
+- **`MA002`** — fixed properly: `Microsoft.Maui.Controls` is now an explicit
+  `PackageReference` on `Oab.App.Tests` instead of arriving transitively.
+
+**Why this is a decision and not tidying.** The product's central lesson so far is
+that two screens were broken for weeks while the tools were saying so and nobody
+was reading (D21, D22). Warnings a team has learned to scroll past are exactly
+that failure in miniature: the mechanism that would report a real problem has
+been trained to be ignored. Zero is the only threshold that stays meaningful,
+because it is the only one a person can check at a glance.
+
+**Cost.** One suppression that must be re-justified if that line ever changes,
+and a version reference that has to move with `$(MauiVersion)` — which it does,
+since it uses the variable.
+
+---
+
 ## Rejected alternatives, briefly
 
 | Considered | Rejected because |
@@ -516,6 +594,9 @@ Duplication is how a codebase hides the fact that something is untested.
 | **A third-party crash reporter** | Needs a network. The product's defining constraint is that it works offline, indefinitely. |
 | **Normalising Arabic digits and separators to plain ASCII before parsing** | Turns `١٢٣٫٥` into `123.5`, which reads as **1235** under any culture where `.` groups. Silent factor-of-ten errors are the worst bug a ledger can have (D23). |
 | **A `NumberEntry` control that only accepts what the app can parse** | Fixes the symptom at the keyboard and leaves the four parsers in place; also fights the platform keyboard, which is the thing least likely to behave as expected on a cheap Android phone. |
+| **Chunking the id list into batches of 500 to dodge SQLite's parameter limit** | Solves a problem `EF.Parameter` removes outright, and adds a magic number that would have to be right forever. Reading the generated SQL was cheaper than working around SQL nobody had read (D24). |
+| **Caching each invoice's outstanding on the `Documents` row** | The stored-balance mistake with extra steps: a second source of truth that drifts the first time a correction lands (D1). One query is enough. |
+| **Leaving the three build warnings and documenting them as known** | That is what §4 of the status doc did, and the point of D25 is that a documented permanent warning is still a warning nobody reads. |
 
 ---
 

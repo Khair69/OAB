@@ -26,6 +26,18 @@ public interface ILedgerStore
     Task AddEntriesAsync(IReadOnlyList<LedgerEntry> entries, CancellationToken ct = default);
     Task<IReadOnlyList<LedgerEntry>> GetEntriesForPartyAsync(Guid partyId, CancellationToken ct = default);
     Task<IReadOnlyList<LedgerEntry>> GetEntriesForDocumentAsync(Guid documentId, CancellationToken ct = default);
+    /// <summary>
+    /// Entries for many documents at once, keyed by document id. Documents with
+    /// no entries are simply absent — a caller asking about an unknown id gets
+    /// nothing back, not an empty-list entry.
+    /// <para>
+    /// This exists because a list screen needs "is each of these invoices paid?"
+    /// and asking one invoice at a time is a query per row. Same shape, and same
+    /// reason, as <see cref="GetBalancesAsync"/>.
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<LedgerEntry>>> GetEntriesForDocumentsAsync(
+        IReadOnlyCollection<Guid> documentIds, CancellationToken ct = default);
 
     Task<decimal> GetPartyBalanceAsync(Guid partyId, CancellationToken ct = default);
     /// <summary>Balance per party id, for list screens. Parties with no entries may be absent.</summary>

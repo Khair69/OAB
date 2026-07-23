@@ -475,10 +475,20 @@ Task<IReadOnlyList<Document>> GetDocumentsAsync(DocumentKind? kind = null, Guid?
 Task AddEntriesAsync(IReadOnlyList<LedgerEntry>, ct);
 Task<IReadOnlyList<LedgerEntry>> GetEntriesForPartyAsync(Guid, ct);
 Task<IReadOnlyList<LedgerEntry>> GetEntriesForDocumentAsync(Guid, ct);
+Task<IReadOnlyDictionary<Guid, IReadOnlyList<LedgerEntry>>> GetEntriesForDocumentsAsync(
+    IReadOnlyCollection<Guid> documentIds, ct);
 
 Task<decimal> GetPartyBalanceAsync(Guid, ct);
 Task<IReadOnlyDictionary<Guid, decimal>> GetBalancesAsync(ct);
 ```
+
+**The two dictionary-returning reads are the list screens' shape.**
+`GetBalancesAsync` answers "what does each party owe?" and
+`GetEntriesForDocumentsAsync` answers "is each of these invoices paid?" — both in
+one query, because the alternative is a query per row on every screen open
+(D24). Both omit keys with nothing behind them, so callers use
+`GetValueOrDefault`. The singular `GetEntriesForDocumentAsync` stays for
+`GetDocumentOutstandingAsync`, which genuinely asks about one invoice.
 
 > **Read that list again for what is missing: there is no `UpdateEntryAsync`
 > and no `DeleteEntryAsync`.** The append-only rule is not a convention here, it

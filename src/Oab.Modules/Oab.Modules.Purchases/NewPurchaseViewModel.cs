@@ -66,9 +66,18 @@ public partial class NewPurchaseViewModel(
             return;
         }
 
-        Party? supplier = SelectedSupplier;
+        // Decided before the try, in one expression, so the compiler can see
+        // what a reader can: past this null check there is always a supplier.
+        // Written as two statements it warned CS8602 on every build — flow
+        // analysis cannot carry "not null" across the second `if`, and a warning
+        // that is always there is a warning nobody reads.
+        // A typed name wins over the picker: it is what the shopkeeper did last.
         var newName = NewSupplierName.Trim();
-        if (supplier is null && newName.Length == 0)
+        var isNewSupplier = newName.Length > 0;
+        Party? supplier = isNewSupplier
+            ? new Party { Name = newName, Roles = PartyRole.Supplier }
+            : SelectedSupplier;
+        if (supplier is null)
         {
             Error = localization["Purchases_SelectSupplier"];
             return;
@@ -76,11 +85,10 @@ public partial class NewPurchaseViewModel(
 
         try
         {
-            if (newName.Length > 0)
-            {
-                supplier = new Party { Name = newName, Roles = PartyRole.Supplier };
+            // Inside the try: creating the party is a write that can fail, and
+            // it must fail into the Error label like everything else here.
+            if (isNewSupplier)
                 await store.AddPartyAsync(supplier);
-            }
 
             var occurredAt = new DateTimeOffset(Date.Date.Add(DateTime.Now.TimeOfDay),
                 TimeZoneInfo.Local.GetUtcOffset(DateTime.Now));
